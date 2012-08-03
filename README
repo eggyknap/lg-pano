@@ -1,0 +1,97 @@
+Description:
+
+xiv is a very simple image viewer without UI and only controled by keys and mouse.
+As opposed to most of the image viewers, it does not rely on scrollbar for image panning.
+It is a powerful tool to analyse huge images.
+The Window is a view of the image in which you can zoom, pan, rotate...
+xiv reads natively 8 and 16 bits binary PPM and TIFF and JPEG images. It uses ImageMagick to convert other formats.
+Image drawing is performed in several threads for a better image analysis experience.
+Next image is preloaded during current image analysis.
+See usage for the full list of features.
+
+xiv comes with an additional script xiv.sh which will open a file
+selection box if called without any file. File selection box requires
+kdialog (KDE), zenity (GNOME) or Xdialog. This script is meant to use
+xiv from a desktop environment.
+Additionnal information can be found on http://lordikc.free.fr/wordpress/?p=701.
+
+License:
+xiv is provided under the terms of the BSD license. See copyright file.
+
+Bug & limitations:
+Mouse interaction conflict with default LXDE mouse shortcuts. You need
+to change LXDE's mouse shortcuts (Alt+Wheel).
+
+Usage: 
+
+xiv v0.8
+Usage xiv [options] file1 file2...
+Options:
+   -geometry widthxheight+ox+oy, default is screen size
+   -threads # threads, default is to auto-detect # of cores.
+   -cache # images (default 5).
+   -no-autorot Disable auto rotate according to EXIF tags.
+   -no-overview Don't display overview.
+   -fullscreen.
+   -histogram Display histogram.
+   -grid Display grid.
+   -browse expand the list of files by browsing the directory of the first file.
+   -shuffle file list.
+   -fifo filename for incoming commands, default is no command file.
+   -v verbose.
+       Commands are:
+         o l filename: load a new image
+         o z zoom_level: if zoom_level <0 fit image in window
+         o c x y: Center view on (x,y) (image pixel coordinates system)
+         o m x y: Move view of (x,y) (image pixel coordinates system)
+         o q: quit
+xiv is a very simple and lightweight image viewer without UI but a X11 window and only controled by keys and mouse.
+As opposed to most of the image viewers, it does not rely on scrollbar for image panning.
+It is a powerful tool to analyse huge images.
+The Window is a view of the image in which you can zoom, pan, rotate...
+xiv reads natively 8 and 16 bits binary PPM and TIFF and JPEG images. It uses ImageMagick to convert other formats.
+Image drawing is performed in several threads for a better image analysis experience.
+Next image is preloaded during current image analysis.
+Shortcuts are:
+   - Key based:
+      o q/Q Quit
+      o n/p Next/previous image in the list
+      o Shift+n/p Next/previous x10 image in the list
+      o ' '/. Center view on pointer
+      o z/Z/+/i Zoom/Unzoom
+      o c/C Contrast
+      o g/G Gamma
+      o l/L Luminosity
+      o v   Reset Luminosity/Contrast
+      o i   Invert colors
+      o Fn  Memorize current pixel coordinate as nth point.
+      o s   Show/hide points.
+      o f   Toggle Full Screen.
+      o h   Toggle display histogram
+      o b   Toggle bilinear interpolation
+      o o   Toggle display overview
+      o m   Toggle displlay grid
+      o r/=/0 Reset view
+      o 1-9 Set zoom level to 1/1..9
+      o [Alt+]1-9 Set zoom level to 1..9
+      o Left/Right/Up/Down pan
+      o Shift+Left/Right/Up/Down fine pan
+      o / or * rotate around center of window by 90° increments rounding angle to n x 90°.
+      o Alt+Left/Right rotate around center of window
+      o Shift+Alt+Left/Right fine rotate around center of window
+   - Mouse based:
+      o Left button+Drag Pan
+      o Shift+Left button+Drag Upper-Left -> Lower Right : Zoom on zone, Lower-Right -> Upper Left Unzoom from zone.
+      o Wheel Zoom/Unzoom keeping pointer position
+      o Shift+Wheel Fine Zoom/Unzoom keeping pointer position
+      o Alt+Wheel Rotate around pointer
+      o Shift+Alt+Wheel Fine rotate around pointer
+      o Button middle Previous image
+      o Button right Next image
+Points input:
+   You can set up to 10 points using keys F1 to F10. If points are displayed (which is the default) you'll see them on top of the image.
+   At the end of the image viewing, the points are written to stdout (before switching to another image or quitting).
+Examples:
+  xiv -browse /images/image1.jpg: opens images1.jpg as well as every files in the /images directory.
+  xiv -shuffle /images/*: opens every files in /images in random order.
+Capabilities: PPM JPEG TIFF EXIF 

@@ -1,0 +1,7 @@
+Better read_tiff function (Tile,...).
+Better gamma correction.
+Add title to kdialog/Xdialog.
+Customizable shortcuts.
+Improve cache and preload.
+Recursive search + skip to next directory.
+
