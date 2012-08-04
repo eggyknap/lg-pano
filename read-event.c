@@ -30,7 +30,7 @@ int init_spacenav(const char *dev_name) {
     return 1;
 }
 
-int get_spacenav_event(XEvent *p) {
+int get_spacenav_event(spnav_event *p) {
     int x, y, z, yaw, pitch, roll;
     x = y = z = yaw = pitch = roll = 0;
     struct input_event ev;
@@ -77,14 +77,12 @@ int get_spacenav_event(XEvent *p) {
                 fprintf(stderr, "unknown axis event\n");
                 break;
         }
-
-        XMotionEvent xme;
-        xme.type = MotionNotify;
-        xme.send_event = True;
-        xme.x = x;
-        xme.y = y;
-
-        memcpy(p, &xme, sizeof(xme));
+        p->motion.x = x;
+        p->motion.y = y;
+        p->motion.z = z;
+        p->motion.yaw = yaw;
+        p->motion.pitch = pitch;
+        p->motion.roll = roll;
 
         return 1;
 
