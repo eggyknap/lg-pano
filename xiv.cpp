@@ -61,6 +61,7 @@ bool fullscreen=false;
 pthread_t th; // Drawing thread
 pthread_t *thFill=0; // Sub drawing threads
 pthread_t thFifo; // Pipe control thread
+pthread_t thSpacenav; // Spacenav control thread
 pthread_t thPreload; // Preload image thread
 
 
@@ -97,7 +98,7 @@ bool revert=false; // Use reverse video
 bool bilin=false;  // Use bilinear interpolation (true) or nearest neighbour (false)
 bool bilinMove=false;
 bool displayHist=false; // Display histogram
-bool displayQuickview=true; // Display overview
+bool displayQuickview=false; // Display overview
 bool refresh=false; // Need a window refresh
 bool run=true; // Keeping running while it's true
 
@@ -151,7 +152,7 @@ void usage(const char* prog)
   fprintf(stderr,"   -threads # threads, default is to auto-detect # of cores.\n");
   fprintf(stderr,"   -cache # images (default 5).\n");
   fprintf(stderr,"   -no-autorot Disable auto rotate according to EXIF tags.\n");
-  fprintf(stderr,"   -no-overview Don't display overview.\n");
+  fprintf(stderr,"   -overview Display overview.\n");
   fprintf(stderr,"   -fullscreen.\n");
   fprintf(stderr,"   -histogram Display histogram.\n");
   fprintf(stderr,"   -grid Display grid.\n");
@@ -1171,6 +1172,33 @@ void zoom(float zf)
   dy=yp-(z*sin(a)*w/2+z*cos(a)*h/2);
 }
 
+// Thread for spacenav
+void *spacenav_handler(void*) {
+    spnav_event spev;
+    
+    // XXX make this udev link not hardcoded. this really doesn't matter for
+    // now, though, because this is LG-specific, and each LG will have one of
+    // these links
+    if (! init_spacenav("/dev/input/spacenavigator")) {
+        pthread_exit(0);
+    }
+
+    while (1) {
+        if (get_spacenav_event(&spev)) {
+            // XXX Don't hardcode the spacenav sensitivity factor (here, it's
+            // 3, and larger numbers decrease the sensitivity)
+            translate(-1 * spev.motion.x / 3, spev.motion.y / 3);
+            float zf = z - z * spev.motion.z / 350;
+            if (zf < 0 || zf > 10) {
+                zf = z;
+            }
+            else
+                zoom(zf);
+        }
+    }
+    return 0;
+}
+
 // Thread for fifo listening
 void* async_fifo(void*)
 {
@@ -1241,8 +1269,13 @@ void quit()
   if(fifo!=NULL)
     {
       fifo=NULL;
+      pthread_cancel(thFifo);
       pthread_join(thFifo,&r);
     }
+  if (spacenav) {
+    pthread_cancel(thSpacenav);
+    pthread_join(thSpacenav, &r);
+  }
   pthread_join(thPreload,&r);
   pthread_join(th,&r);
 }
@@ -1361,9 +1394,9 @@ int main (int argc, char** argv)
 	{
 	  fullscreen=true;
 	}
-      else if(0==strcmp(argv[i],"-no-overview"))
+      else if(0==strcmp(argv[i],"-overview"))
 	{
-	  displayQuickview=false;
+	  displayQuickview=true;
 	}
       else if(0==strcmp(argv[i],"-histogram"))
 	{
@@ -1433,6 +1466,11 @@ int main (int argc, char** argv)
 		files[nbfiles++]=strdup(argv[i]);
 	    }
 	}
+    }
+
+  if (spacenav)
+    {
+      pthread_create(&thSpacenav, NULL, spacenav_handler, 0);
     }
 
   // Create the image cache.
