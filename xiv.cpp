@@ -41,6 +41,7 @@
 #include "xiv.h"
 #include "xiv_utils.h"
 #include "xiv_readers.h"
+#include "read-event.h"
 
 // X11 global variables
 pthread_mutex_t mutexWin = PTHREAD_MUTEX_INITIALIZER; // Mutex protecting the window
@@ -112,6 +113,7 @@ char** files=0;
 int nbfiles=0;
 int idxfile=0;
 bool shuffle=false;
+bool spacenav=false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
 int powv[256];
@@ -157,6 +159,7 @@ void usage(const char* prog)
   fprintf(stderr,"   -shuffle file list.\n");
   fprintf(stderr,"   -bilinear Turn on bilinear interpolation.\n");
   fprintf(stderr,"   -fifo filename for incoming commands, default is no command file.\n");
+  fprintf(stderr,"   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
   fprintf(stderr,"   -v verbose.\n");
   fprintf(stderr,"       Commands are:\n");
   fprintf(stderr,"         o l filename: load a new image\n");
@@ -1377,6 +1380,10 @@ int main (int argc, char** argv)
       else if(0==strcmp(argv[i],"-shuffle"))
 	{
 	  shuffle=true;
+    }
+      else if (0 == strcmp(argv[i], "-spacenav"))
+    {
+      spacenav = true;
 	}
       else if(0==strcmp(argv[i],"-bilinear"))
 	{
