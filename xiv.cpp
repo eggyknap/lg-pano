@@ -43,6 +43,10 @@
 #include "xiv_readers.h"
 #include "read-event.h"
 
+    // XXX Don't hardcode the spacenav sensitivity factor. OBTW Larger numbers
+    // decrease the sensitivity.
+#define SPNAV_SENSITIVITY 3.0
+
 // X11 global variables
 pthread_mutex_t mutexWin = PTHREAD_MUTEX_INITIALIZER;	// Mutex protecting the window
 Display *display;
@@ -1263,6 +1267,19 @@ void translate(float stepX, float stepY)
 {
 	dx = dx - (-z * cos(a) * stepX - z * sin(a) * stepY);
 	dy = dy - (-z * sin(a) * stepX + z * cos(a) * stepY);
+    
+    //fprintf(stderr, "%f, %d, %d, %f, %d, %d, %f\n", dx, imgCurrent->w, w, dy, imgCurrent->h, h, z);
+    //fprintf(stderr, "dx: %f, z: %f, dx/z: %f, imgCurrent->w: %d, window width: %d\n",
+    //    dx, z, dx / z, imgCurrent->w, w);
+
+    if (dy > imgCurrent->h - 10)
+        dy = imgCurrent->h - 10;
+    if (dy / z < -h + 10)
+        dy = z * (-h + 10);
+    if (dx > imgCurrent->w - 10)
+        dx = imgCurrent->w - 10;
+    if (dx / z < -w + 10)
+        dx = (10 -w) * z;
 }
 
 void zoom(float zf)
@@ -1272,6 +1289,18 @@ void zoom(float zf)
 	z = zf;
 	dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2);
 	dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
+}
+
+// Display next image
+void next_image(int step)
+{
+	idxfile += step;
+
+	if (idxfile >= nbfiles)
+		idxfile = 0;
+	if (idxfile < 0)
+		idxfile = nbfiles - 1;
+	display_image(files[idxfile]);
 }
 
 // Thread for spacenav
@@ -1288,15 +1317,21 @@ void *spacenav_handler(void *)
 
 	while (1) {
 		if (get_spacenav_event(&spev)) {
-			// XXX Don't hardcode the spacenav sensitivity factor (here, it's
-			// 3, and larger numbers decrease the sensitivity)
-			translate(-1 * spev.motion.x / 3, spev.motion.y / 3);
-			float zf = z - z * spev.motion.z / 350;
-			if (zf < 0 || zf > 10) {
-				zf = z;
-			} else
-				zoom(zf);
-		}
+            if (spev.type == SPNAV_MOTION) {
+                translate(-1 * spev.x / SPNAV_SENSITIVITY, spev.y / SPNAV_SENSITIVITY);
+                float zf = z - z * spev.z / 350.0 / SPNAV_SENSITIVITY;
+                if (zf < 0 || zf > 10) {
+                    zf = z;
+                } else
+                    zoom(zf);
+            } else {
+                if (spev.type == SPNAV_BUTTON) {
+                    next_image(1);
+                }
+            }
+		} else {
+            usleep(100);
+        }
 	}
 	return 0;
 }
@@ -1365,18 +1400,6 @@ void quit()
 	}
 	pthread_join(thPreload, &r);
 	pthread_join(th, &r);
-}
-
-// Display next image
-void next_image(int step)
-{
-	idxfile += step;
-
-	if (idxfile >= nbfiles)
-		idxfile = 0;
-	if (idxfile < 0)
-		idxfile = nbfiles - 1;
-	display_image(files[idxfile]);
 }
 
 // Destroy current window
@@ -1738,7 +1761,7 @@ int main(int argc, char **argv)
 				h = event.xconfigure.height;
 				data = (unsigned char *)malloc(w * h * 4);	// Allocate new drawing area
 				if (data == NULL) {
-					fprintf(stderr, "Not enougth memory\n");
+					fprintf(stderr, "Not enough memory\n");
 					exit(1);
 				}
 				image =
