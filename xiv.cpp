@@ -1272,6 +1272,7 @@ void translate(float stepX, float stepY)
     //fprintf(stderr, "dx: %f, z: %f, dx/z: %f, imgCurrent->w: %d, window width: %d\n",
     //    dx, z, dx / z, imgCurrent->w, w);
 
+    // Constrain movement so the image stays at least somewhat on the screen
     if (dy > imgCurrent->h - 10)
         dy = imgCurrent->h - 10;
     if (dy / z < -h + 10)
