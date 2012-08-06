@@ -44,14 +44,24 @@ int get_spacenav_event(spnav_event * p)
 		return 0;
 	}
 
+//    fprintf(stderr, "time.tv_sec: %ld, time.tv_usec: %ld, type: %d, code: %d, value: %d\n",
+//        event_data->time.tv_sec,
+//        event_data->time.tv_usec,
+//        event_data->type,
+//        event_data->code,
+//        event_data->value);
+
 	if (event_data->type == EV_KEY) {
-		fprintf(stderr, "button press\n");
+        p->type = 1;
+        p->button = event_data->code - BTN_0;
+        p->value = event_data->value;
 		return 1;
+
 	} else if (event_data->type == EV_SYN) {
-		// EV_SYN type may be quite useful for some devices
-		// identifies the sent data complete and therefore apply-able
-//      fprintf(stderr, "sync event\n");
-		return 1;
+        // These events indicate the data from the spacenav has been flushed to
+        // the host computer. Ignore these for now.
+		return 0;
+
 	} else if (event_data->type == EV_REL || event_data->type == EV_ABS) {
 		int axis = event_data->code;
 		int amount = event_data->value;
@@ -79,15 +89,19 @@ int get_spacenav_event(spnav_event * p)
 			fprintf(stderr, "unknown axis event\n");
 			break;
 		}
-		p->motion.x = x;
-		p->motion.y = y;
-		p->motion.z = z;
-		p->motion.yaw = yaw;
-		p->motion.pitch = pitch;
-		p->motion.roll = roll;
+        p->type = SPNAV_MOTION;
+		p->x = x;
+		p->y = y;
+		p->z = z;
+		p->yaw = yaw;
+		p->pitch = pitch;
+		p->roll = roll;
 
 		return 1;
 
+	} else if (event_data->type == EV_MSC) {
+        // These can be ignored, it seems. The SourceForge spacenav driver ignores them anyway.
+        return 0;
 	} else {
 		int evtype = event_data->type;
 
