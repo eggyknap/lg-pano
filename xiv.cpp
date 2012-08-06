@@ -38,6 +38,10 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <libgen.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
 #include "xiv.h"
 #include "xiv_utils.h"
 #include "xiv_readers.h"
@@ -66,6 +70,7 @@ pthread_t th;			// Drawing thread
 pthread_t *thFill = 0;		// Sub drawing threads
 pthread_t thFifo;		// Pipe control thread
 pthread_t thSpacenav;		// Spacenav control thread
+pthread_t thUDPSlave;		// UDP slave control thread
 pthread_t thPreload;		// Preload image thread
 
 // Drawing 
@@ -118,6 +123,10 @@ int nbfiles = 0;
 int idxfile = 0;
 bool shuffle = false;
 bool spacenav = false;
+bool broadcast = false;
+char udphost[500] = "";
+int udpport = 0;
+bool slave = false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
 int powv[256];
@@ -152,57 +161,43 @@ void usage(const char *prog)
 	fprintf(stderr, "%s v%s\n", progn, VERSION);
 	fprintf(stderr, "Usage %s [options] file1 file2...\n", progn);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr,
-		"   -geometry widthxheight+ox+oy, default is screen size\n");
-	fprintf(stderr,
-		"   -threads # threads, default is to auto-detect # of cores.\n");
+	fprintf(stderr, "   -geometry widthxheight+ox+oy, default is screen size\n");
+	fprintf(stderr, "   -threads # threads, default is to auto-detect # of cores.\n");
 	fprintf(stderr, "   -cache # images (default 5).\n");
-	fprintf(stderr,
-		"   -no-autorot Disable auto rotate according to EXIF tags.\n");
+	fprintf(stderr, "   -no-autorot Disable auto rotate according to EXIF tags.\n");
 	fprintf(stderr, "   -overview Display overview.\n");
 	fprintf(stderr, "   -fullscreen.\n");
 	fprintf(stderr, "   -histogram Display histogram.\n");
 	fprintf(stderr, "   -grid Display grid.\n");
-	fprintf(stderr,
-		"   -browse expand the list of files by browsing the directory of the first file.\n");
+	fprintf(stderr, "   -browse expand the list of files by browsing the directory of the first file.\n");
 	fprintf(stderr, "   -shuffle file list.\n");
 	fprintf(stderr, "   -bilinear Turn on bilinear interpolation.\n");
-	fprintf(stderr,
-		"   -fifo filename for incoming commands, default is no command file.\n");
-	fprintf(stderr,
-		"   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
+	fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
+	fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
+	fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on\n");
+	fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
+	fprintf(stderr, "   -broadcast include this option if -udphost is a broadcast address\n");
+    fprintf(stderr, "   -slave act as a slave, waiting for synchronization traffic on udphost:udpport\n");
 	fprintf(stderr, "   -v verbose.\n");
 	fprintf(stderr, "       Commands are:\n");
 	fprintf(stderr, "         o l filename: load a new image\n");
-	fprintf(stderr,
-		"         o z zoom_level: if zoom_level <0 fit image in window\n");
-	fprintf(stderr,
-		"         o c x y: Center view on (x,y) (image pixel coordinates system)\n");
-	fprintf(stderr,
-		"         o m x y: Move view of (x,y) (image pixel coordinates system)\n");
+	fprintf(stderr, "         o z zoom_level: if zoom_level <0 fit image in window\n");
+	fprintf(stderr, "         o c x y: Center view on (x,y) (image pixel coordinates system)\n");
+	fprintf(stderr, "         o m x y: Move view of (x,y) (image pixel coordinates system)\n");
 	fprintf(stderr, "         o q: quit\n");
-	fprintf(stderr,
-		"%s is a very simple and lightweight image viewer without UI but a X11 window and only controled by keys and mouse.\n",
-		progn);
-	fprintf(stderr,
-		"As opposed to most of the image viewers, it does not rely on scrollbar for image panning.\n");
+	fprintf(stderr, "%s is a very simple and lightweight image viewer without UI but a X11 window and only controled by keys and mouse.\n", progn);
+	fprintf(stderr, "As opposed to most of the image viewers, it does not rely on scrollbar for image panning.\n");
 	fprintf(stderr, "It is a powerful tool to analyse huge images.\n");
-	fprintf(stderr,
-		"The Window is a view of the image in which you can zoom, pan, rotate...\n");
-	fprintf(stderr,
-		"%s reads natively 8 and 16 bits binary PPM and TIFF and JPEG images. It uses ImageMagick to convert other formats.\n",
-		progn);
-	fprintf(stderr,
-		"Image drawing is performed in several threads for a better image analysis experience.\n");
-	fprintf(stderr,
-		"Next image is preloaded during current image analysis.\n");
+	fprintf(stderr, "The Window is a view of the image in which you can zoom, pan, rotate...\n");
+	fprintf(stderr, "%s reads natively 8 and 16 bits binary PPM and TIFF and JPEG images. It uses ImageMagick to convert other formats.\n", progn);
+	fprintf(stderr, "Image drawing is performed in several threads for a better image analysis experience.\n");
+	fprintf(stderr, "Next image is preloaded during current image analysis.\n");
 	fprintf(stderr, "Shortcuts are:\n");
 	fprintf(stderr, "   - Key based:\n");
 	fprintf(stderr, "      o q/Q Quit\n");
 	fprintf(stderr, "      o n/p Next/previous image in the list\n");
 	fprintf(stderr, "      o D Delete current image. \n");
-	fprintf(stderr,
-		"      o d The current image is renamed to file.jpg.del. You'llcan delete it manually afterward.\n");
+	fprintf(stderr, "      o d The current image is renamed to file.jpg.del. You'llcan delete it manually afterward.\n");
 	fprintf(stderr, "      o Shift+n/p Jump 10 images forward/backward.\n");
 	fprintf(stderr, "      o ' '/. Center view on pointer\n");
 	fprintf(stderr, "      o z/Z/+/i Zoom/Unzoom\n");
@@ -211,8 +206,7 @@ void usage(const char *prog)
 	fprintf(stderr, "      o l/L Luminosity +/-\n");
 	fprintf(stderr, "      o v   Reset Luminosity/Contrast\n");
 	fprintf(stderr, "      o i   Invert colors\n");
-	fprintf(stderr,
-		"      o Fn  Memorize current pixel coordinate as nth point.\n");
+	fprintf(stderr, "      o Fn  Memorize current pixel coordinate as nth point.\n");
 	fprintf(stderr, "      o s   Show/hide points.\n");
 	fprintf(stderr, "      o a   Show/hide about message.\n");
 	fprintf(stderr, "      o f   Toggle Full Screen.\n");
@@ -225,35 +219,24 @@ void usage(const char *prog)
 	fprintf(stderr, "      o [Alt+]1-9 Set zoom level to 1..9\n");
 	fprintf(stderr, "      o Left/Right/Up/Down pan\n");
 	fprintf(stderr, "      o Shift+Left/Right/Up/Down fine pan\n");
-	fprintf(stderr,
-		"      o / or * rotate around center of window by 90° increments rounding angle to n x 90°.\n");
-	fprintf(stderr,
-		"      o Alt+Left/Right rotate around center of window\n");
-	fprintf(stderr,
-		"      o Shift+Alt+Left/Right fine rotate around center of window\n");
+	fprintf(stderr, "      o / or * rotate around center of window by 90° increments rounding angle to n x 90°.\n");
+	fprintf(stderr, "      o Alt+Left/Right rotate around center of window\n");
+	fprintf(stderr, "      o Shift+Alt+Left/Right fine rotate around center of window\n");
 	fprintf(stderr, "   - Mouse based:\n");
 	fprintf(stderr, "      o Left button+Drag Pan\n");
-	fprintf(stderr,
-		"      o Shift+Left button+Drag Upper-Left -> Lower Right : Zoom on zone, Lower-Right -> Upper Left Unzoom from zone.\n");
+	fprintf(stderr, "      o Shift+Left button+Drag Upper-Left -> Lower Right : Zoom on zone, Lower-Right -> Upper Left Unzoom from zone.\n");
 	fprintf(stderr, "      o Wheel Zoom/Unzoom keeping pointer position\n");
-	fprintf(stderr,
-		"      o Shift+Wheel Fine Zoom/Unzoom keeping pointer position\n");
+	fprintf(stderr, "      o Shift+Wheel Fine Zoom/Unzoom keeping pointer position\n");
 	fprintf(stderr, "      o Alt+Wheel Rotate around pointer\n");
 	fprintf(stderr, "      o Shift+Alt+Wheel Fine rotate around pointer\n");
 	fprintf(stderr, "      o Button middle Previous image\n");
 	fprintf(stderr, "      o Button right Next image\n");
 	fprintf(stderr, "Points input:\n");
-	fprintf(stderr,
-		"   You can set up to 10 points using keys F1 to F10. If points are displayed (which is the default) you'll see them on top of the image.\n");
-	fprintf(stderr,
-		"   At the end of the image viewing, the points are written to stdout (before switching to another image or quitting).\n");
+	fprintf(stderr, "   You can set up to 10 points using keys F1 to F10. If points are displayed (which is the default) you'll see them on top of the image.\n");
+	fprintf(stderr, "   At the end of the image viewing, the points are written to stdout (before switching to another image or quitting).\n");
 	fprintf(stderr, "Examples:\n");
-	fprintf(stderr,
-		"  %s -browse /images/image1.jpg: opens images1.jpg as well as every files in the /images directory.\n",
-		progn);
-	fprintf(stderr,
-		"  %s -shuffle /images/*: opens every files in /images in random order.\n",
-		progn);
+	fprintf(stderr, "  %s -browse /images/image1.jpg: opens images1.jpg as well as every files in the /images directory.\n", progn);
+	fprintf(stderr, "  %s -shuffle /images/*: opens every files in /images in random order.\n", progn);
 	fprintf(stderr, "Capabilities: ");
 	fprintf(stderr, "PPM ");
 #ifdef HAVE_LIBJPEG
@@ -1263,6 +1246,90 @@ void rotate(float da)
 	dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
 }
 
+typedef struct {
+    int flag;
+    float dx, dy, z;
+} sync_struct;
+
+void *udp_handler(void *) {
+    int recv_socket = 0;
+    struct sockaddr_in addr;
+    sync_struct data;
+
+    recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (recv_socket == 0) {
+        perror("Couldn't open receiving socket");
+        exit(0);
+    }
+    memset(&addr, 0, sizeof(sockaddr_in));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(udpport);
+    if (bind(recv_socket, (sockaddr *) &addr, sizeof(addr)) < 0) {
+        perror("Couldn't bind socket");
+        exit(0);
+    }
+
+    while (1) {
+        if (read(recv_socket, &data, sizeof(sync_struct)) >= (ssize_t) sizeof(sync_struct) &&
+            data.flag == 1234) {
+            // Do something here with what we've received
+            fprintf(stderr, "%d, %f, %f, %f\n", data.flag, data.dx, data.dy, data.z);
+            dx = data.dx;
+            dy = data.dy;
+            z = data.z;
+        }
+    }
+    return 0;
+}
+
+int send_socket = 0;
+
+void send_coords(void) {
+    sync_struct a;
+
+    if (slave || udpport == 0) {
+        return;
+    }
+
+    if (send_socket == 0) {
+        struct sockaddr_in addr;
+        struct hostent *server;
+        int dummy = 1;
+
+        if (verbose) {
+            fprintf(stderr, "Opening socket to %s:%d\n", udphost, udpport);
+        }
+        send_socket = socket(AF_INET, SOCK_DGRAM, 0);
+        if (broadcast)
+            setsockopt(send_socket, SOL_SOCKET, SO_BROADCAST, &dummy, sizeof(int));
+        if (send_socket == 0) {
+            perror("Couldn't open socket");
+            exit(0);
+        }
+        server = gethostbyname(udphost);
+        if (server == NULL) {
+            perror("Couldn't figure out host");
+            exit(0);
+        }
+
+        memset(&addr, 0, sizeof(sockaddr_in));
+        addr.sin_family = AF_INET;
+        memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+        addr.sin_port = htons(udpport);
+        if (connect(send_socket, (sockaddr *) &addr, sizeof(addr)) < 0) {
+            perror("Error connecting UDP client");
+        }
+    }
+
+    a.flag = 1234;
+    a.dx = dx;
+    a.dy = dy;
+    a.z = z;
+
+    write(send_socket, &a, sizeof(a));
+}
+
 void translate(float stepX, float stepY)
 {
 	dx = dx - (-z * cos(a) * stepX - z * sin(a) * stepY);
@@ -1281,6 +1348,8 @@ void translate(float stepX, float stepY)
         dx = imgCurrent->w - 10;
     if (dx / z < -w + 10)
         dx = (10 -w) * z;
+
+    send_coords();
 }
 
 void zoom(float zf)
@@ -1290,6 +1359,8 @@ void zoom(float zf)
 	z = zf;
 	dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2);
 	dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
+
+    send_coords();
 }
 
 // Display next image
@@ -1399,6 +1470,10 @@ void quit()
 		pthread_cancel(thSpacenav);
 		pthread_join(thSpacenav, &r);
 	}
+    if (slave) {
+		pthread_cancel(thUDPSlave);
+		pthread_join(thUDPSlave, &r);
+    }
 	pthread_join(thPreload, &r);
 	pthread_join(th, &r);
 }
@@ -1508,6 +1583,28 @@ int main(int argc, char **argv)
 			shuffle = true;
 		} else if (0 == strcmp(argv[i], "-spacenav")) {
 			spacenav = true;
+            if (slave) {
+                fprintf(stderr, "Cannot include -spacenav and -slave on the same command.");
+                exit(0);
+            }
+		} else if (0 == strcmp(argv[i], "-slave")) {
+			slave = true;
+		} else if (0 == strcmp(argv[i], "-broadcast")) {
+			broadcast = true;
+		} else if (0 == strcmp(argv[i], "-udphost")) {
+			if ((i + 1) < argc)
+				sscanf(argv[++i], "%s", udphost);
+			else {
+				usage(argv[0]);
+				exit(1);
+			}
+		} else if (0 == strcmp(argv[i], "-udpport")) {
+			if ((i + 1) < argc)
+				sscanf(argv[++i], "%d", &udpport);
+			else {
+				usage(argv[0]);
+				exit(1);
+			}
 		} else if (0 == strcmp(argv[i], "-bilinear")) {
 			bilin = true;
 		} else if (0 == strcmp(argv[i], "-v")) {
@@ -1529,6 +1626,10 @@ int main(int argc, char **argv)
 		} else if (0 == strcmp(argv[i], "-fifo")) {
 			if ((i + 1) < argc)
 				fifo = argv[++i];
+            if (slave) {
+                fprintf(stderr, "Cannot include -fifo and -slave on the same command.");
+                exit(0);
+            }
 		} else {
 			struct stat statbuf;
 			if (lstat(argv[i], &statbuf) != -1) {
@@ -1546,6 +1647,9 @@ int main(int argc, char **argv)
 	if (spacenav) {
 		pthread_create(&thSpacenav, NULL, spacenav_handler, 0);
 	}
+    if (slave) {
+        pthread_create(&thUDPSlave, NULL, udp_handler, 0);
+    }
 	// Create the image cache.
 	{
 		MutexProtect mp(&mutexCache);
@@ -1775,413 +1879,430 @@ int main(int argc, char **argv)
 				dy = yp - (z * sin(a) * (w / 2) +
 					   z * cos(a) * (h / 2));
 			}
-		} else if (event.type == ButtonPress
-			   && event.xbutton.button == Button2) {
-			next_image(-1);
-		} else if (event.type == ButtonPress
-			   && event.xbutton.button == Button3) {
-			next_image(1);
-		} else if (event.type == ButtonPress
-			   && event.xbutton.button == Button4) {
-			// Wheel Forward
-			Window r, wr;
-			int wx, wy, rx, ry;
-			unsigned int m;
-			MutexProtect mwin(&mutexWin);
-			XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
-				      &wy, &m);
+		} else if (!slave && event.type == ButtonPress
+            && event.xbutton.button == Button2) {
+            next_image(-1);
+            send_coords();
+        } else if (!slave && event.type == ButtonPress
+            && event.xbutton.button == Button3) {
+            next_image(1);
+            send_coords();
+        } else if (!slave && event.type == ButtonPress
+            && event.xbutton.button == Button4) {
+            // Wheel Forward
+            Window r, wr;
+            int wx, wy, rx, ry;
+            unsigned int m;
+            MutexProtect mwin(&mutexWin);
+            XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
+                    &wy, &m);
 
-			// Zoom/Rotate on current position
-			xp = z * cos(a) * wx - z * sin(a) * wy + dx;
-			yp = z * sin(a) * wx + z * cos(a) * wy + dy;
+            // Zoom/Rotate on current position
+            xp = z * cos(a) * wx - z * sin(a) * wy + dx;
+            yp = z * sin(a) * wx + z * cos(a) * wy + dy;
 
-			if (m & Mod1Mask)	// Alt is pressed -> Rotate
-			{
-				if (m & ShiftMask)
-					a -= 0.5 * M_PI / 180;
-				else
-					a -= 5 * M_PI / 180;
-			} else	// No Alt -> Zoom
-			{
-				if (m & ShiftMask)
-					z /= 1.05;
-				else
-					z /= 1.5;
-			}
+            if (m & Mod1Mask)	// Alt is pressed -> Rotate
+            {
+                if (m & ShiftMask)
+                    a -= 0.5 * M_PI / 180;
+                else
+                    a -= 5 * M_PI / 180;
+            } else	// No Alt -> Zoom
+            {
+                if (m & ShiftMask)
+                    z /= 1.05;
+                else
+                    z /= 1.5;
+            }
 
-			dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
-			dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
-		} else if (event.type == ButtonPress
-			   && event.xbutton.button == Button5) {
-			// Wheel Backward
-			Window r, wr;
-			int wx, wy, rx, ry;
-			unsigned int m;
-			MutexProtect mwin(&mutexWin);
-			XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
-				      &wy, &m);
+            dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
+            dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
 
-			// Unzoom from current position
-			xp = z * cos(a) * wx - z * sin(a) * wy + dx;
-			yp = z * sin(a) * wx + z * cos(a) * wy + dy;
+            send_coords();
+        } else if (!slave && event.type == ButtonPress
+            && event.xbutton.button == Button5) {
+            // Wheel Backward
+            Window r, wr;
+            int wx, wy, rx, ry;
+            unsigned int m;
+            MutexProtect mwin(&mutexWin);
+            XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
+                    &wy, &m);
 
-			if (m & Mod1Mask) {
-				if (m & ShiftMask)
-					a += 0.2 * M_PI / 180;
-				else
-					a += 5 * M_PI / 180;
-			} else {
-				if (m & ShiftMask)
-					z *= 1.05;
-				else
-					z *= 1.5;
-			}
+            // Unzoom from current position
+            xp = z * cos(a) * wx - z * sin(a) * wy + dx;
+            yp = z * sin(a) * wx + z * cos(a) * wy + dy;
 
-			dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
-			dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
-		} else if (event.type == ButtonPress
-			   && event.xbutton.button == Button1) {
-			// Left is down
-			leftdown = true;
-			bilinMove = bilin;
-			bilin = false;
-			Window r, wr;
-			int wx, wy, rx, ry;
-			unsigned int m;
-			MutexProtect mwin(&mutexWin);
-			XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
-				      &wy, &m);
-			if (m & ShiftMask) {
-				displayZone = true;
-				zx1 = zx2 = wx;
-				zy1 = zy2 = wy;
-			} else {
-				xp = z * cos(a) * wx - z * sin(a) * wy + dx;
-				yp = z * sin(a) * wx + z * cos(a) * wy + dy;
-			}
-		} else if (event.type == ButtonRelease
-			   && event.xbutton.button == Button1) {
-			// Left is up
-			leftdown = false;
-			bilin = bilinMove;
-			if (displayZone) {
-				Window r, wr;
-				int wx, wy, rx, ry;
-				unsigned int m;
-				MutexProtect mwin(&mutexWin);
-				XQueryPointer(display, window, &r, &wr, &rx,
-					      &ry, &wx, &wy, &m);
-				displayZone = false;
-				if (m & ShiftMask && zx1 < zx2 && zy1 < zy2) {
-					float xp1 =
-					    z * cos(a) * zx1 -
-					    z * sin(a) * zy1 + dx;
-					float yp1 =
-					    z * sin(a) * zx1 +
-					    z * cos(a) * zy1 + dy;
-					float xp2 =
-					    z * cos(a) * zx2 -
-					    z * sin(a) * zy2 + dx;
-					float yp2 =
-					    z * sin(a) * zx2 +
-					    z * cos(a) * zy2 + dy;
-					xp = (xp1 + xp2) / 2;
-					yp = (yp1 + yp2) / 2;
-					// Compute new zoom
-					z = max(fabsf((xp2 - xp1) / w),
-						fabsf((yp2 - yp1) / h));
-					// Center view on center of zone
-					dx = xp - (z * cos(a) * (w / 2) -
-						   z * sin(a) * (h / 2));
-					dy = yp - (z * sin(a) * (w / 2) +
-						   z * cos(a) * (h / 2));
-				} else if (m & ShiftMask && zx1 > zx2
-					   && zy1 > zy2) {
-					float xp1 =
-					    z * cos(a) * zx1 -
-					    z * sin(a) * zy1 + dx;
-					float yp1 =
-					    z * sin(a) * zx1 +
-					    z * cos(a) * zy1 + dy;
-					float xp2 =
-					    z * cos(a) * zx2 -
-					    z * sin(a) * zy2 + dx;
-					float yp2 =
-					    z * sin(a) * zx2 +
-					    z * cos(a) * zy2 + dy;
-					xp = (xp1 + xp2) / 2;
-					yp = (yp1 + yp2) / 2;
-					// Compute new zoom
-					z /= max(fabsf((xp2 - xp1) / w),
-						 fabsf((yp2 - yp1) / h));
-					// Center view on center of zone
-					dx = xp - (z * cos(a) * (w / 2) -
-						   z * sin(a) * (h / 2));
-					dy = yp - (z * sin(a) * (w / 2) +
-						   z * cos(a) * (h / 2));
-				}
-			}
-		} else if (event.type == KeyPress) {
-			char c[11];
-			KeySym ks;
-			XComposeStatus cs;
-			int nc = XLookupString(&(event.xkey), c, 10, &ks, &cs);
-			c[nc] = 0;
+            if (m & Mod1Mask) {
+                if (m & ShiftMask)
+                    a += 0.2 * M_PI / 180;
+                else
+                    a += 5 * M_PI / 180;
+            } else {
+                if (m & ShiftMask)
+                    z *= 1.05;
+                else
+                    z *= 1.5;
+            }
 
-			Window r, wr;
-			int wx, wy, rx, ry;
-			unsigned int m;
-			{
-				MutexProtect mwin(&mutexWin);
-				XQueryPointer(display, window, &r, &wr, &rx,
-					      &ry, &wx, &wy, &m);
-			}
+            dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
+            dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
 
-			if (0 == strcmp(c, "1") || 0 == strcmp(c, "2") || 0 == strcmp(c, "3") || 0 == strcmp(c, "4") || 0 == strcmp(c, "5") || 0 == strcmp(c, "6") || 0 == strcmp(c, "7") || 0 == strcmp(c, "8") || 0 == strcmp(c, "9"))	// Zoom level keep center view
-			{
-				xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 +
-				    dx;
-				yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 +
-				    dy;
+            send_coords();
+        } else if (!slave && event.type == ButtonPress
+            && event.xbutton.button == Button1) {
+            // Left is down
+            leftdown = true;
+            bilinMove = bilin;
+            bilin = false;
+            Window r, wr;
+            int wx, wy, rx, ry;
+            unsigned int m;
+            MutexProtect mwin(&mutexWin);
+            XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
+                    &wy, &m);
+            if (m & ShiftMask) {
+                displayZone = true;
+                zx1 = zx2 = wx;
+                zy1 = zy2 = wy;
+            } else {
+                xp = z * cos(a) * wx - z * sin(a) * wy + dx;
+                yp = z * sin(a) * wx + z * cos(a) * wy + dy;
+            }
 
-				z = 1 / atof(c);
-				if (m & Mod1Mask)
-					z = 1 / z;
+            send_coords();
+        } else if (!slave && event.type == ButtonRelease
+            && event.xbutton.button == Button1) {
+            // Left is up
+            leftdown = false;
+            bilin = bilinMove;
+            if (displayZone) {
+                Window r, wr;
+                int wx, wy, rx, ry;
+                unsigned int m;
+                MutexProtect mwin(&mutexWin);
+                XQueryPointer(display, window, &r, &wr, &rx,
+                        &ry, &wx, &wy, &m);
+                displayZone = false;
+                if (m & ShiftMask && zx1 < zx2 && zy1 < zy2) {
+                    float xp1 =
+                        z * cos(a) * zx1 -
+                        z * sin(a) * zy1 + dx;
+                    float yp1 =
+                        z * sin(a) * zx1 +
+                        z * cos(a) * zy1 + dy;
+                    float xp2 =
+                        z * cos(a) * zx2 -
+                        z * sin(a) * zy2 + dx;
+                    float yp2 =
+                        z * sin(a) * zx2 +
+                        z * cos(a) * zy2 + dy;
+                    xp = (xp1 + xp2) / 2;
+                    yp = (yp1 + yp2) / 2;
+                    // Compute new zoom
+                    z = max(fabsf((xp2 - xp1) / w),
+                        fabsf((yp2 - yp1) / h));
+                    // Center view on center of zone
+                    dx = xp - (z * cos(a) * (w / 2) -
+                        z * sin(a) * (h / 2));
+                    dy = yp - (z * sin(a) * (w / 2) +
+                        z * cos(a) * (h / 2));
+                } else if (m & ShiftMask && zx1 > zx2
+                    && zy1 > zy2) {
+                    float xp1 =
+                        z * cos(a) * zx1 -
+                        z * sin(a) * zy1 + dx;
+                    float yp1 =
+                        z * sin(a) * zx1 +
+                        z * cos(a) * zy1 + dy;
+                    float xp2 =
+                        z * cos(a) * zx2 -
+                        z * sin(a) * zy2 + dx;
+                    float yp2 =
+                        z * sin(a) * zx2 +
+                        z * cos(a) * zy2 + dy;
+                    xp = (xp1 + xp2) / 2;
+                    yp = (yp1 + yp2) / 2;
+                    // Compute new zoom
+                    z /= max(fabsf((xp2 - xp1) / w),
+                        fabsf((yp2 - yp1) / h));
+                    // Center view on center of zone
+                    dx = xp - (z * cos(a) * (w / 2) -
+                        z * sin(a) * (h / 2));
+                    dy = yp - (z * sin(a) * (w / 2) +
+                        z * cos(a) * (h / 2));
+                }
+            }
 
-				dx = xp - (z * cos(a) * w / 2 -
-					   z * sin(a) * h / 2);
-				dy = yp - (z * sin(a) * w / 2 +
-					   z * cos(a) * h / 2);
-			}
-			if (0 == strcmp(c, "+") || 0 == strcmp(c, "z"))	// Zoom keep center view
-			{
-				zoom(z / 1.5);
-			} else if (0 == strcmp(c, "-") || 0 == strcmp(c, "Z"))	// Unzoom keep center view
-			{
-				zoom(z * 1.5);
-			} else if (0 == strcmp(c, "/") || 0 == strcmp(c, "*"))	// Rotate PI/2
-			{
-				float fa = 0;
-				int n = (int)(a / (M_PI / 2));
-				if (n > 3)
-					n = 0;
-				if (n < -3)
-					n = 0;
-				if (0 == strcmp(c, "/"))
-					fa = (n + 1) * M_PI / 2;
-				else
-					fa = (n - 1) * M_PI / 2;
-				rotate(fa);
-			} else if (0 == strcmp(c, " ") || 0 == strcmp(c, "."))	// Center on current pointer position
-			{
-				xp = z * cos(a) * wx - z * sin(a) * wy + dx;
-				yp = z * sin(a) * wx + z * cos(a) * wy + dy;
+            send_coords();
+        } else if (!slave && leftdown)	// Handle mouse based pan
+        {
+            Window r, wr;
+            int wx, wy, rx, ry;
+            unsigned int m;
 
-				dx = xp - (z * cos(a) * (w / 2) -
-					   z * sin(a) * (h / 2));
-				dy = yp - (z * sin(a) * (w / 2) +
-					   z * cos(a) * (h / 2));
-			} else if (0 == strcmp(c, "s")) {
-				displayPts = !displayPts;
-				refresh = true;
-			} else if (0 == strcmp(c, "a")) {
-				displayAbout = !displayAbout;
-				refresh = true;
-			} else if (0 == strcmp(c, "f")) {
-				fullscreen = !fullscreen;
-				MutexProtect mwin(&mutexWin);
-				destroy_window();
-				create_window(fullscreen);
-			} else if (0 == strcmp(c, "c") || 0 == strcmp(c, "C"))	// Contrast +/-
-			{
-				if (0 == strcmp(c, "C"))
-					cr -= 8;
-				else
-					cr += 8;
-				if (cr <= 0)
-					cr = 1;
-			} else if (0 == strcmp(c, "g") || 0 == strcmp(c, "G"))	// Contrast +/-
-			{
-				if (0 == strcmp(c, "g"))
-					gm *= 1.1;
-				else
-					gm /= 1.1;
-			} else if (0 == strcmp(c, "h"))	// Toggle display histogram
-			{
-				displayHist = !displayHist;
-				refresh = true;
-			} else if (0 == strcmp(c, "m"))	// Toggle display grid
-			{
-				displayGrid = !displayGrid;
-				refresh = true;
-			} else if (0 == strcmp(c, "o"))	// Toggle display overview
-			{
-				displayQuickview = !displayQuickview;
-				refresh = true;
-			} else if (0 == strcmp(c, "b"))	// Toggle bilinear interpolation
-			{
-				bilin = !bilin;
-			} else if (0 == strcmp(c, "l") || 0 == strcmp(c, "L"))	// Luminosity +/-
-			{
-				if (0 == strcmp(c, "l"))
-					lu += 8;
-				else
-					lu -= 8;
-			} else if (0 == strcmp(c, "v"))	// Reset Luminosity/Contrast
-			{
-				lu = 0;
-				cr = 255;
-				gm = 1;
-			} else if (0 == strcmp(c, "i"))	// Invert radiometry
-			{
-				revert = !revert;
-			} else if (0 == strcmp(c, "=") || 0 == strcmp(c, "r") || 0 == strcmp(c, "0"))	// Reset view
-			{
-				full_extend();
-			} else if (0 == strcmp(c, "n") || 0 == strcmp(c, "p") || 0 == strcmp(c, "N") || 0 == strcmp(c, "P"))	// next/previous image
-			{
-				if (0 == strcmp(c, "n"))
-					next_image(1);
-				else if (0 == strcmp(c, "N"))
-					next_image(nbfiles / 20);
-				else if (0 == strcmp(c, "p"))
-					next_image(-1);
-				else
-					next_image(-nbfiles / 20);
-			} else if (0 == strcmp(c, "D"))	// Delete image 
-			{
-				if (nbfiles > 0) {
-					unlink(files[idxfile]);
-					free(files[idxfile]);
-					nbfiles--;
-					for (int i = idxfile; i < nbfiles; i++)
-						files[i] = files[i + 1];
-					next_image(0);
-				}
-			} else if (0 == strcmp(c, "d"))	// Move image to file.jpg.del so that you can undelete it.
-			{
-				if (nbfiles > 0) {
-					// Append .del to filename and rename file to it
-					// The file is not actually deleted.
-					char *tmp =
-					    (char *)
-					    malloc(strlen(files[idxfile]) + 5);
-					tmp[0] = 0;
-					sprintf(tmp, "%s.del", files[idxfile]);
-					rename(files[idxfile], tmp);
-					free(tmp);
-					free(files[idxfile]);
-					nbfiles--;
-					for (int i = idxfile; i < nbfiles; i++)
-						files[i] = files[i + 1];
-					next_image(0);
-				}
-			} else if (0 == strcmp(c, "q") || 0 == strcmp(c, "Q"))	// Quit
-			{
-				write_points(files[idxfile]);
-				run = false;
-			} else if (ks == XK_Left)	// Key based Pan / Rotate
-			{
-				if (m & Mod1Mask) {
-					if (m & ShiftMask)
-						rotate(a + 0.2 * M_PI / 180);
-					else
-						rotate(a + 5 * M_PI / 180);
-				} else {
-					if (m & ShiftMask)
-						translate(-w / 20, 0);
-					else
-						translate(-w / 5, 0);
-				}
-			} else if (ks == XK_Right)	// Key based Pan / Rotate
-			{
-				if (m & Mod1Mask) {
-					if (m & ShiftMask)
-						rotate(a - 0.2 * M_PI / 180);
-					else
-						rotate(a - 5 * M_PI / 180);
-				} else {
-					if (m & ShiftMask)
-						translate(w / 20, 0);
-					else
-						translate(w / 5, 0);
-				}
-			} else if (ks == XK_Up)	// Key based Pan Up
-			{
-				if (m & ShiftMask)
-					translate(0, h / 20);
-				else
-					translate(0, h / 5);
-			} else if (ks == XK_Down)	// Key based Pan Down
-			{
-				if (m & ShiftMask)
-					translate(0, -h / 20);
-				else
-					translate(0, -h / 5);
-			} else if (ks == XK_F1 || ks == XK_F2 || ks == XK_F3
-				   || ks == XK_F4 || ks == XK_F5 || ks == XK_F6
-				   || ks == XK_F7 || ks == XK_F8 || ks == XK_F9
-				   || ks == XK_F10) {
-				xp = z * cos(a) * wx - z * sin(a) * wy + dx;
-				yp = z * sin(a) * wx + z * cos(a) * wy + dy;
+            MutexProtect mwin(&mutexWin);
+            XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
+                    &wy, &m);
+            if (displayZone) {
+                zx2 = wx;
+                zy2 = wy;
+            } else {
+                dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
+                dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
+            }
+            send_coords();
+        } else if (event.type == KeyPress) {
+            char c[11];
+            KeySym ks;
+            XComposeStatus cs;
+            int nc = XLookupString(&(event.xkey), c, 10, &ks, &cs);
+            c[nc] = 0;
 
-				int idxp = 0;
-				switch (ks) {
-				case XK_F1:
-					idxp = 1;
-					break;
-				case XK_F2:
-					idxp = 2;
-					break;
-				case XK_F3:
-					idxp = 3;
-					break;
-				case XK_F4:
-					idxp = 4;
-					break;
-				case XK_F5:
-					idxp = 5;
-					break;
-				case XK_F6:
-					idxp = 6;
-					break;
-				case XK_F7:
-					idxp = 7;
-					break;
-				case XK_F8:
-					idxp = 8;
-					break;
-				case XK_F9:
-					idxp = 9;
-					break;
-				case XK_F10:
-					idxp = 10;
-					break;
-				}
+            Window r, wr;
+            int wx, wy, rx, ry;
+            unsigned int m;
+            {
+                MutexProtect mwin(&mutexWin);
+                XQueryPointer(display, window, &r, &wr, &rx,
+                        &ry, &wx, &wy, &m);
+            }
 
-				if (verbose)
-					fprintf(stderr, "%d:%f %f\n", idxp, xp,
-						yp);
-				pts[2 * (idxp - 1) + 0] = xp;
-				pts[2 * (idxp - 1) + 1] = yp;
-				refresh = true;
-			}
-		} else if (leftdown)	// Handle mouse based pan
-		{
-			Window r, wr;
-			int wx, wy, rx, ry;
-			unsigned int m;
+            if (0 == strcmp(c, "q") || 0 == strcmp(c, "Q"))	// Quit
+            {
+                write_points(files[idxfile]);
+                run = false;
+            } else if (! slave) {
+                if (0 == strcmp(c, "1") || 0 == strcmp(c, "2") || 0 == strcmp(c, "3") || 0 == strcmp(c, "4") || 0 == strcmp(c, "5") || 0 == strcmp(c, "6") || 0 == strcmp(c, "7") || 0 == strcmp(c, "8") || 0 == strcmp(c, "9"))	// Zoom level keep center view
+                {
+                    xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 +
+                        dx;
+                    yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 +
+                        dy;
 
-			MutexProtect mwin(&mutexWin);
-			XQueryPointer(display, window, &r, &wr, &rx, &ry, &wx,
-				      &wy, &m);
-			if (displayZone) {
-				zx2 = wx;
-				zy2 = wy;
-			} else {
-				dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
-				dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
-			}
+                    z = 1 / atof(c);
+                    if (m & Mod1Mask)
+                        z = 1 / z;
+
+                    dx = xp - (z * cos(a) * w / 2 -
+                        z * sin(a) * h / 2);
+                    dy = yp - (z * sin(a) * w / 2 +
+                        z * cos(a) * h / 2);
+
+                    send_coords();
+                }
+                if (0 == strcmp(c, "+") || 0 == strcmp(c, "z"))	// Zoom keep center view
+                {
+                    zoom(z / 1.5);
+                } else if (0 == strcmp(c, "-") || 0 == strcmp(c, "Z"))	// Unzoom keep center view
+                {
+                    zoom(z * 1.5);
+                } else if (0 == strcmp(c, "/") || 0 == strcmp(c, "*"))	// Rotate PI/2
+                {
+                    float fa = 0;
+                    int n = (int)(a / (M_PI / 2));
+                    if (n > 3)
+                        n = 0;
+                    if (n < -3)
+                        n = 0;
+                    if (0 == strcmp(c, "/"))
+                        fa = (n + 1) * M_PI / 2;
+                    else
+                        fa = (n - 1) * M_PI / 2;
+                    rotate(fa);
+                    send_coords();
+                } else if (0 == strcmp(c, " ") || 0 == strcmp(c, "."))	// Center on current pointer position
+                {
+                    xp = z * cos(a) * wx - z * sin(a) * wy + dx;
+                    yp = z * sin(a) * wx + z * cos(a) * wy + dy;
+
+                    dx = xp - (z * cos(a) * (w / 2) -
+                        z * sin(a) * (h / 2));
+                    dy = yp - (z * sin(a) * (w / 2) +
+                        z * cos(a) * (h / 2));
+                    send_coords();
+                } else if (0 == strcmp(c, "s")) {
+                    displayPts = !displayPts;
+                    refresh = true;
+                } else if (0 == strcmp(c, "a")) {
+                    displayAbout = !displayAbout;
+                    refresh = true;
+                } else if (0 == strcmp(c, "f")) {
+                    fullscreen = !fullscreen;
+                    MutexProtect mwin(&mutexWin);
+                    destroy_window();
+                    create_window(fullscreen);
+                } else if (0 == strcmp(c, "c") || 0 == strcmp(c, "C"))	// Contrast +/-
+                {
+                    if (0 == strcmp(c, "C"))
+                        cr -= 8;
+                    else
+                        cr += 8;
+                    if (cr <= 0)
+                        cr = 1;
+                } else if (0 == strcmp(c, "g") || 0 == strcmp(c, "G"))	// Contrast +/-
+                {
+                    if (0 == strcmp(c, "g"))
+                        gm *= 1.1;
+                    else
+                        gm /= 1.1;
+                } else if (0 == strcmp(c, "h"))	// Toggle display histogram
+                {
+                    displayHist = !displayHist;
+                    refresh = true;
+                } else if (0 == strcmp(c, "m"))	// Toggle display grid
+                {
+                    displayGrid = !displayGrid;
+                    refresh = true;
+                } else if (0 == strcmp(c, "o"))	// Toggle display overview
+                {
+                    displayQuickview = !displayQuickview;
+                    refresh = true;
+                } else if (0 == strcmp(c, "b"))	// Toggle bilinear interpolation
+                {
+                    bilin = !bilin;
+                } else if (0 == strcmp(c, "l") || 0 == strcmp(c, "L"))	// Luminosity +/-
+                {
+                    if (0 == strcmp(c, "l"))
+                        lu += 8;
+                    else
+                        lu -= 8;
+                } else if (0 == strcmp(c, "v"))	// Reset Luminosity/Contrast
+                {
+                    lu = 0;
+                    cr = 255;
+                    gm = 1;
+                } else if (0 == strcmp(c, "i"))	// Invert radiometry
+                {
+                    revert = !revert;
+                } else if (0 == strcmp(c, "=") || 0 == strcmp(c, "r") || 0 == strcmp(c, "0"))	// Reset view
+                {
+                    full_extend();
+                } else if (0 == strcmp(c, "n") || 0 == strcmp(c, "p") || 0 == strcmp(c, "N") || 0 == strcmp(c, "P"))	// next/previous image
+                {
+                    if (0 == strcmp(c, "n"))
+                        next_image(1);
+                    else if (0 == strcmp(c, "N"))
+                        next_image(nbfiles / 20);
+                    else if (0 == strcmp(c, "p"))
+                        next_image(-1);
+                    else
+                        next_image(-nbfiles / 20);
+                } else if (0 == strcmp(c, "D"))	// Delete image 
+                {
+                    if (nbfiles > 0) {
+                        unlink(files[idxfile]);
+                        free(files[idxfile]);
+                        nbfiles--;
+                        for (int i = idxfile; i < nbfiles; i++)
+                            files[i] = files[i + 1];
+                        next_image(0);
+                    }
+                } else if (0 == strcmp(c, "d"))	// Move image to file.jpg.del so that you can undelete it.
+                {
+                    if (nbfiles > 0) {
+                        // Append .del to filename and rename file to it
+                        // The file is not actually deleted.
+                        char *tmp =
+                            (char *)
+                            malloc(strlen(files[idxfile]) + 5);
+                        tmp[0] = 0;
+                        sprintf(tmp, "%s.del", files[idxfile]);
+                        rename(files[idxfile], tmp);
+                        free(tmp);
+                        free(files[idxfile]);
+                        nbfiles--;
+                        for (int i = idxfile; i < nbfiles; i++)
+                            files[i] = files[i + 1];
+                        next_image(0);
+                    }
+                } else if (ks == XK_Left)	// Key based Pan / Rotate
+                {
+                    if (m & Mod1Mask) {
+                        if (m & ShiftMask)
+                            rotate(a + 0.2 * M_PI / 180);
+                        else
+                            rotate(a + 5 * M_PI / 180);
+                    } else {
+                        if (m & ShiftMask)
+                            translate(-w / 20, 0);
+                        else
+                            translate(-w / 5, 0);
+                    }
+                } else if (ks == XK_Right)	// Key based Pan / Rotate
+                {
+                    if (m & Mod1Mask) {
+                        if (m & ShiftMask)
+                            rotate(a - 0.2 * M_PI / 180);
+                        else
+                            rotate(a - 5 * M_PI / 180);
+                    } else {
+                        if (m & ShiftMask)
+                            translate(w / 20, 0);
+                        else
+                            translate(w / 5, 0);
+                    }
+                } else if (ks == XK_Up)	// Key based Pan Up
+                {
+                    if (m & ShiftMask)
+                        translate(0, h / 20);
+                    else
+                        translate(0, h / 5);
+                } else if (ks == XK_Down)	// Key based Pan Down
+                {
+                    if (m & ShiftMask)
+                        translate(0, -h / 20);
+                    else
+                        translate(0, -h / 5);
+                } else if (ks == XK_F1 || ks == XK_F2 || ks == XK_F3
+                    || ks == XK_F4 || ks == XK_F5 || ks == XK_F6
+                    || ks == XK_F7 || ks == XK_F8 || ks == XK_F9
+                    || ks == XK_F10) {
+                    xp = z * cos(a) * wx - z * sin(a) * wy + dx;
+                    yp = z * sin(a) * wx + z * cos(a) * wy + dy;
+
+                    int idxp = 0;
+                    switch (ks) {
+                    case XK_F1:
+                        idxp = 1;
+                        break;
+                    case XK_F2:
+                        idxp = 2;
+                        break;
+                    case XK_F3:
+                        idxp = 3;
+                        break;
+                    case XK_F4:
+                        idxp = 4;
+                        break;
+                    case XK_F5:
+                        idxp = 5;
+                        break;
+                    case XK_F6:
+                        idxp = 6;
+                        break;
+                    case XK_F7:
+                        idxp = 7;
+                        break;
+                    case XK_F8:
+                        idxp = 8;
+                        break;
+                    case XK_F9:
+                        idxp = 9;
+                        break;
+                    case XK_F10:
+                        idxp = 10;
+                        break;
+                    }
+
+                    if (verbose)
+                        fprintf(stderr, "%d:%f %f\n", idxp, xp,
+                            yp);
+                    pts[2 * (idxp - 1) + 0] = xp;
+                    pts[2 * (idxp - 1) + 1] = yp;
+                    refresh = true;
+                }
+            }
 		} else if (event.type == ClientMessage &&
 			   (Atom) event.xclient.data.l[0] == wmDeleteMessage) {
 			run = false;
