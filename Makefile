@@ -1,6 +1,6 @@
 CXX = g++
 VERSION = 0.8
-CXXFLAGS = -Wall -g -O2
+CXXFLAGS = -Wall -g3 -O2 -ggdb
 LDFLAGS = 
 PREFIX = /usr/local
 
