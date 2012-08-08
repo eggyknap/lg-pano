@@ -126,6 +126,7 @@ bool spacenav = false;
 bool broadcast = false;
 char udphost[500] = "";
 int udpport = 0;
+int xoffset = 0;
 bool slave = false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
@@ -173,6 +174,7 @@ void usage(const char *prog)
 	fprintf(stderr, "   -shuffle file list.\n");
 	fprintf(stderr, "   -bilinear Turn on bilinear interpolation.\n");
 	fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
+    fprintf(stderr, "   -xoffset ##  The number of pixels to offset the image in the X direction. Positive values move the image to the left.\n");
 	fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
 	fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on\n");
 	fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
@@ -1583,6 +1585,13 @@ int main(int argc, char **argv)
 			browse = true;
 		} else if (0 == strcmp(argv[i], "-shuffle")) {
 			shuffle = true;
+		} else if (0 == strcmp(argv[i], "-xoffset")) {
+			if ((i + 1) < argc)
+				sscanf(argv[++i], "%d", &xoffset);
+			else {
+				usage(argv[0]);
+				exit(1);
+			}
 		} else if (0 == strcmp(argv[i], "-spacenav")) {
 			spacenav = true;
             if (slave) {
@@ -1838,7 +1847,7 @@ int main(int argc, char **argv)
 
 		MutexProtect mp(&mutexData);
 		if (event.type == Expose && event.xexpose.count < 1
-		    && image != NULL) {
+		    && image != NULL && image->data != NULL) {
 			MutexProtect mwin(&mutexWin);
 			if (verbose)
 				fprintf(stderr, "Expose\n");
@@ -1859,10 +1868,8 @@ int main(int argc, char **argv)
 				}
 
 				// Keep image centered
-				xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 +
-				    dx;
-				yp = z * sin(a) * w / 2 + z * cos(a) * h / 2 +
-				    dy;
+				xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
+				yp = z * sin(a) * w / 2 + z * cos(a) * h / 2 + dy;
 				w = event.xconfigure.width;
 				osdSize = w / 7;	// Adjust OSD size
 				h = event.xconfigure.height;
@@ -2077,10 +2084,8 @@ int main(int argc, char **argv)
             } else if (! slave) {
                 if (0 == strcmp(c, "1") || 0 == strcmp(c, "2") || 0 == strcmp(c, "3") || 0 == strcmp(c, "4") || 0 == strcmp(c, "5") || 0 == strcmp(c, "6") || 0 == strcmp(c, "7") || 0 == strcmp(c, "8") || 0 == strcmp(c, "9"))	// Zoom level keep center view
                 {
-                    xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 +
-                        dx;
-                    yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 +
-                        dy;
+                    xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
+                    yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 + dy;
 
                     z = 1 / atof(c);
                     if (m & Mod1Mask)
