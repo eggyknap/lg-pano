@@ -873,7 +873,7 @@ void *async_fill(void *)
 			zy1a = zy1;
 			zy2a = zy2;
 			refresh = false;
-			if (data != NULL && image != NULL) {
+			if (data != NULL && image != NULL && image->data != NULL) {
 				MutexProtect mwin(&mutexWin);
 				fill();
 
@@ -1274,7 +1274,9 @@ void *udp_handler(void *) {
         if (read(recv_socket, &data, sizeof(sync_struct)) >= (ssize_t) sizeof(sync_struct) &&
             data.flag == 1234) {
             // Do something here with what we've received
-            fprintf(stderr, "%d, %f, %f, %f\n", data.flag, data.dx, data.dy, data.z);
+            if (verbose) {
+                fprintf(stderr, "%d, %f, %f, %f\n", data.flag, data.dx, data.dy, data.z);
+            }
             dx = data.dx;
             dy = data.dy;
             z = data.z;
