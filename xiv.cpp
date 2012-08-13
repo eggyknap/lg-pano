@@ -55,6 +55,7 @@
 pthread_mutex_t mutexWin = PTHREAD_MUTEX_INITIALIZER;	// Mutex protecting the window
 Display *display;
 Window window;
+Pixmap pixmap;
 Visual *visual;
 int screen;
 int depth;
@@ -64,6 +65,8 @@ Cursor watch;			// Wait cursor
 Cursor normal;			// Normal cursor
 Atom wmDeleteMessage;
 bool fullscreen = false;
+
+bool use_new_fill = false;
 
 // Threads
 pthread_t th;			// Drawing thread
@@ -695,7 +698,7 @@ void *async_fill_part(void *bounds)
 }
 
 // Fill data with image according to zoom, angle and translation
-void fill()
+void old_fill()
 {
 	if (imgCurrent == 0)
 		return;
@@ -838,6 +841,40 @@ void fill()
 	}
 }
 
+void new_fill()
+{
+    int x, y, i, r, g, b, idx;
+    
+    if (imgCurrent == NULL) return;
+
+    idx = 0;
+    for (x = 0; x < w; x++) {
+        for (y = 0; y < h; y++) {
+            if (y > imgCurrent->h || x > imgCurrent->w) {
+                r = 0; b = 0; g = 0;
+            } else {
+                // Image is stored bgr
+                i = 3 * (imgCurrent->w * x + y);
+                b = imgCurrent->buf[i];
+                g = imgCurrent->buf[i+1];
+                r = imgCurrent->buf[i+2];
+//                b >>= imgCurrent->nbits;
+//                g >>= imgCurrent->nbits;
+//                r >>= imgCurrent->nbits;
+            }
+            data[idx++] = r;
+            data[idx++] = b;
+            data[idx++] = g;
+            idx++;
+        } // y
+    } // x
+}
+
+inline void fill() {
+    if (use_new_fill) new_fill();
+    else old_fill();
+}
+
 // Asynchronous image filling
 void *async_fill(void *)
 {
@@ -879,8 +916,8 @@ void *async_fill(void *)
 				MutexProtect mwin(&mutexWin);
 				fill();
 
-				XPutImage(display, window, gc, image, 0, 0, 0,
-					  0, w, h);
+				XPutImage(display, window, gc, image, 0, 0, 0, 0, w, h);
+                XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
 
 				// Add labels to points
 				if (displayPts) {
@@ -914,7 +951,7 @@ void *async_fill(void *)
 							 (3 * h) / 4, about,
 							 strlen(about));
 				}
-				XFlush(display);
+				//XFlush(display);
 			}
 		} else		// Otherwise, just wait ...
 		{
@@ -1346,16 +1383,18 @@ void translate(float stepX, float stepY)
     //    dx, z, dx / z, imgCurrent->w, w);
 
     // Constrain movement so the image stays at least somewhat on the screen
-    if (dy > imgCurrent->h - 10)
-        dy = imgCurrent->h - 10;
-    if (dy / z < -h + 10)
-        dy = z * (-h + 10);
-    if (dx > imgCurrent->w - 10)
-        dx = imgCurrent->w - 10;
-    if (dx / z < -w + 10)
-        dx = (10 -w) * z;
+    if (imgCurrent != NULL) {
+        if (dy > imgCurrent->h - 10)
+            dy = imgCurrent->h - 10;
+        if (dy / z < -h + 10)
+            dy = z * (-h + 10);
+        if (dx > imgCurrent->w - 10)
+            dx = imgCurrent->w - 10;
+        if (dx / z < -w + 10)
+            dx = (10 -w) * z;
 
-    send_coords();
+        send_coords();
+    }
 }
 
 void zoom(float zf)
@@ -1488,6 +1527,7 @@ void quit()
 void destroy_window()
 {
 	XDestroyWindow(display, window);
+	XFreePixmap(display, pixmap);
 }
 
 // Create the window
@@ -1495,6 +1535,8 @@ void create_window(bool fs)
 {
 	// Create the 
 	Window root = DefaultRootWindow(display);
+    XWindowAttributes xwa;
+
 	int ww = wref;
 	int wh = href;
 	if (fs) {
@@ -1505,6 +1547,8 @@ void create_window(bool fs)
 				     ox, oy, ww, wh, 0,
 				     BlackPixel(display, screen),
 				     WhitePixel(display, screen));
+    XGetWindowAttributes(display, window, &xwa);
+    pixmap = XCreatePixmap(display, window, ww, wh, xwa.depth);
 
 	XSelectInput(display, window,
 		     ExposureMask | ButtonPressMask | ButtonReleaseMask |
@@ -1594,6 +1638,8 @@ int main(int argc, char **argv)
 				usage(argv[0]);
 				exit(1);
 			}
+		} else if (0 == strcmp(argv[i], "-newfill")) {
+			use_new_fill = true;
 		} else if (0 == strcmp(argv[i], "-spacenav")) {
 			spacenav = true;
             if (slave) {
@@ -1854,8 +1900,9 @@ int main(int argc, char **argv)
 			MutexProtect mwin(&mutexWin);
 			if (verbose)
 				fprintf(stderr, "Expose\n");
-			XPutImage(display, window, gc, image, 0, 0, 0, 0, w, h);
-			XFlush(display);
+			XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, w, h);
+            XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
+			//XFlush(display);
 		} else if (event.type == ConfigureNotify)	// Handle window resizing
 		{
 			if (verbose)
