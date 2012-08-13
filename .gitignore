@@ -2,3 +2,6 @@
 \.*.swp
 xiv
 *.jpg
+Makefile
+config.log
+config.status
