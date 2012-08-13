@@ -66,8 +66,6 @@ Cursor normal;			// Normal cursor
 Atom wmDeleteMessage;
 bool fullscreen = false;
 
-bool use_new_fill = false;
-
 // Threads
 pthread_t th;			// Drawing thread
 pthread_t *thFill = 0;		// Sub drawing threads
@@ -148,7 +146,7 @@ bool displayZone = false;
 float pts[20];
 const char *ptsNames[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" };
 
-bool displayPts = true;
+bool displayPts = false;
 int crossSize = 4;
 
 bool displayGrid = false;
@@ -698,7 +696,7 @@ void *async_fill_part(void *bounds)
 }
 
 // Fill data with image according to zoom, angle and translation
-void old_fill()
+/* void old_fill()
 {
 	if (imgCurrent == 0)
 		return;
@@ -839,22 +837,29 @@ void old_fill()
 			}
 		}
 	}
-}
+} */
 
-void new_fill()
+void fill()
 {
-    int x, y, i, r, g, b, idx;
+    int x, y, i, r, g, b, idx, ix, iy;
     
     if (imgCurrent == NULL) return;
 
-    idx = 0;
-    for (x = 0; x < w; x++) {
-        for (y = 0; y < h; y++) {
-            if (y > imgCurrent->h || x > imgCurrent->w) {
-                r = 0; b = 0; g = 0;
+    idx = xoffset;
+    // X and Y will be screen coordinates
+    for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+            // ix and iy are image coordinates
+            ix = x * z + dx;
+            iy = y * z + dy;
+
+            if (iy > imgCurrent->h || ix > imgCurrent->w || iy < 0 || ix < 0) {
+                r = 255; b = 255; g = 255;
             } else {
+                // i is the location in the data array of the image coordinates ix and iy
+                i = 3 * (imgCurrent->w * iy + ix);
+
                 // Image is stored bgr
-                i = 3 * (imgCurrent->w * x + y);
                 b = imgCurrent->buf[i];
                 g = imgCurrent->buf[i+1];
                 r = imgCurrent->buf[i+2];
@@ -866,104 +871,49 @@ void new_fill()
             data[idx++] = b;
             data[idx++] = g;
             idx++;
-        } // y
-    } // x
-}
-
-inline void fill() {
-    if (use_new_fill) new_fill();
-    else old_fill();
+            idx %= 4 * w * h;
+        } // x
+    } // y
 }
 
 // Asynchronous image filling
-void *async_fill(void *)
+bool is_changed(void)
 {
-	float za = 0, aa = 0, dxa = 0, dya = 0;
-	float gma = 0;
-	int la = 0;
-	int ca = 0;
-	bool ra = false;
-	bool bilina = false;
+	static float za = 0, aa = 0, dxa = 0, dya = 0;
+	static float gma = 0;
+	static int la = 0;
+	static int ca = 0;
+	static bool ra = false;
+	static bool bilina = false;
 	//  bool dqa=false;
 	//  bool dha=false;
 	//  bool dza=false;
-	int zx1a = 0, zx2a = 0, zy1a = 0, zy2a = 0;
-	int delay = 20000;
+	static int zx1a = 0, zx2a = 0, zy1a = 0, zy2a = 0;
+    bool changed;
 
-	while (run) {
-		// If something changed we need to redraw
-		if (za != z || aa != a || dx != dxa || dy != dya ||
-		    la != lu || ca != cr || ra != revert || gma != gm
-		    || bilina != bilin || zx1a != zx1 || zx2a != zx2
-		    || zy1a != zy1 || zy2a != zy2 || refresh) {
-			delay = 20000;
-			MutexProtect mp(&mutexData);
-			za = z;
-			aa = a;
-			dxa = dx;
-			dya = dy;
-			la = lu;
-			ca = cr;
-			bilina = bilin;
-			gma = gm;
-			ra = revert;
-			zx1a = zx1;
-			zx2a = zx2;
-			zy1a = zy1;
-			zy2a = zy2;
-			refresh = false;
-			if (data != NULL && image != NULL && image->data != NULL) {
-				MutexProtect mwin(&mutexWin);
-				fill();
-
-				XPutImage(display, window, gc, image, 0, 0, 0, 0, w, h);
-                XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
-
-				// Add labels to points
-				if (displayPts) {
-					float caz = cos(a) / z;
-					float saz = sin(a) / z;
-
-					for (int p = 0; p < 10; p++) {
-						float xp = pts[2 * p];
-						float yp = pts[2 * p + 1];
-						if (xp >= 0) {
-							int wx =
-							    (int)(caz *
-								  (xp - dx) +
-								  saz * (yp -
-									 dy));
-							int wy =
-							    (int)(-saz *
-								  (xp - dx) +
-								  caz * (yp -
-									 dy));
-							XDrawImageString
-							    (display, window,
-							     gc, wx + 8, wy - 8,
-							     ptsNames[p],
-							     p == 9 ? 2 : 1);
-						}
-					}
-				}
-				if (displayAbout) {
-					XDrawImageString(display, window, gc, 8,
-							 (3 * h) / 4, about,
-							 strlen(about));
-				}
-				//XFlush(display);
-			}
-		} else		// Otherwise, just wait ...
-		{
-			// ... and gently increase wait state
-			delay *= 102;
-			delay /= 100;
-			if (delay > 200000)
-				delay = 200000;
-			usleep(delay);
-		}
-	}
-	return 0;
+    // If something changed we need to redraw
+    if (za != z || aa != a || dx != dxa || dy != dya ||
+        la != lu || ca != cr || ra != revert || gma != gm
+        || bilina != bilin || zx1a != zx1 || zx2a != zx2
+        || zy1a != zy1 || zy2a != zy2 || refresh) {
+        changed = true;
+        za = z;
+        aa = a;
+        dxa = dx;
+        dya = dy;
+        la = lu;
+        ca = cr;
+        bilina = bilin;
+        gma = gm;
+        ra = revert;
+        zx1a = zx1;
+        zx2a = zx2;
+        zy1a = zy1;
+        zy2a = zy2;
+        refresh = false;
+    }
+    else changed = false;
+    return changed;
 }
 
 // Set parameters so that image fit into window
@@ -1216,7 +1166,7 @@ void display_image(const char *file)
 		pts[i] = -1;
 	// Set the wait cursor
 	XDefineCursor(display, window, watch);
-	XFlush(display);
+	//XFlush(display);
 
 	histMax = 0;
 	imgCurrent = load_image(file);
@@ -1519,8 +1469,8 @@ void quit()
 		pthread_cancel(thUDPSlave);
 		pthread_join(thUDPSlave, &r);
     }
-	pthread_join(thPreload, &r);
-	pthread_join(th, &r);
+//	pthread_join(thPreload, &r);
+	//pthread_join(th, &r);
 }
 
 // Destroy current window
@@ -1571,6 +1521,15 @@ void create_window(bool fs)
 
 	// Display the window
 	XMapWindow(display, window);
+}
+
+void draw_image(void)
+{
+    MutexProtect mwin(&mutexWin);
+    fill();
+    XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, w, h);
+    XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
+    //XFlush(display);
 }
 
 int main(int argc, char **argv)
@@ -1638,8 +1597,6 @@ int main(int argc, char **argv)
 				usage(argv[0]);
 				exit(1);
 			}
-		} else if (0 == strcmp(argv[i], "-newfill")) {
-			use_new_fill = true;
 		} else if (0 == strcmp(argv[i], "-spacenav")) {
 			spacenav = true;
             if (slave) {
@@ -1883,8 +1840,8 @@ int main(int argc, char **argv)
 		files[nbfiles++] = strdup(PREFIX "/share/xiv/xiv.ppm");
 	}
 
-	pthread_create(&th, NULL, async_fill, 0);
-	pthread_create(&thPreload, NULL, async_load, 0);
+//	pthread_create(&th, NULL, async_fill, 0);
+//	pthread_create(&thPreload, NULL, async_load, 0);
 
 	bool leftdown = false;
 
@@ -1895,15 +1852,14 @@ int main(int argc, char **argv)
 		XNextEvent(display, &event);
 
 		MutexProtect mp(&mutexData);
-		if (event.type == Expose && event.xexpose.count < 1
+
+		if ((is_changed() || (event.type == Expose && event.xexpose.count < 1))
 		    && image != NULL && image->data != NULL) {
-			MutexProtect mwin(&mutexWin);
 			if (verbose)
 				fprintf(stderr, "Expose\n");
-			XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, w, h);
-            XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
-			//XFlush(display);
-		} else if (event.type == ConfigureNotify)	// Handle window resizing
+            draw_image();
+		}
+        if (event.type == ConfigureNotify)	// Handle window resizing
 		{
 			if (verbose)
 				fprintf(stderr, "Configure %d %d %d\n",
@@ -1937,6 +1893,7 @@ int main(int argc, char **argv)
 					   z * sin(a) * (h / 2));
 				dy = yp - (z * sin(a) * (w / 2) +
 					   z * cos(a) * (h / 2));
+                fill();
 			}
 		} else if (!slave && event.type == ButtonPress
             && event.xbutton.button == Button2) {
