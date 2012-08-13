@@ -1,12 +1,15 @@
 CXX = @CXX@
 VERSION = @VERSION@
-CXXFLAGS = -Wall @CXXFLAGS@
+CXXFLAGS = -m32 -Wall @CXXFLAGS@
 LDFLAGS = @LDFLAGS@
 PREFIX = @prefix@
 
 all: xiv
 
 .cpp.o:
+	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
+
+.c.o:
 	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
 
 xiv: xiv.o xiv_utils.o xiv_readers.o read-event.o
