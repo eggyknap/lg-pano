@@ -35,10 +35,10 @@ inline int endian()
 // Read a line from a ppm file discarding comment and empty lines
 char *read_ppm_line(FILE * f, char *buf)
 {
-	fgets(buf, 1024, f);
+	if (!fgets(buf, 1024, f)) return NULL;
 	// Ignores comment and empty lines
 	while (strstr(buf, "#") == buf || strstr(buf, "\n") == buf) {
-		fgets(buf, 1024, f);
+		if (!fgets(buf, 1024, f)) return NULL;
 	}
 	return buf;
 }
@@ -80,7 +80,8 @@ unsigned char *read_ppm(const char *sFile, int &iW, int &iH, int &nbBytes,
 	if (buf == NULL)
 		return 0;
 
-	fread(buf, iW * iH, 3 * nbBytes, f);
+	if (!fread(buf, iW * iH, 3 * nbBytes, f))
+        return 0;
 	// If image is 16 bit wide, compute max value in case there a less significant bytes.
 	if (nbBytes == 2) {
 		unsigned short *p = (unsigned short *)buf;
