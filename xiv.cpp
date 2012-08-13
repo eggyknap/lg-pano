@@ -1331,7 +1331,9 @@ void send_coords(void) {
     a.dy = dy;
     a.z = z;
 
-    write(send_socket, &a, sizeof(a));
+    if (write(send_socket, &a, sizeof(a)) <= 0 && verbose) {
+        fprintf(stderr, "Write returned 0 or -1; writing may have failed\n");
+    }
 }
 
 void translate(float stepX, float stepY)
@@ -1751,12 +1753,13 @@ int main(int argc, char **argv)
 	if (ncores == 0) {
 		FILE *f = fopen("/proc/cpuinfo", "r");
 		char tmp[1024];
-		fgets(tmp, 1024, f);
-		while (!feof(f)) {
-			if (strstr(tmp, "processor") == tmp)
-				ncores++;
-			fgets(tmp, 1024, f);
-		}
+		if (fgets(tmp, 1024, f)) {
+            while (!feof(f)) {
+                if (strstr(tmp, "processor") == tmp)
+                    ncores++;
+                if (!fgets(tmp, 1024, f)) break;
+            }
+        }
 		fclose(f);
 		if (ncores == 0)
 			ncores = 1;
