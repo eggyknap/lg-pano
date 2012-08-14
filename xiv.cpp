@@ -127,7 +127,7 @@ bool spacenav = false;
 bool broadcast = false;
 char udphost[500] = "";
 int udpport = 0;
-int xoffset = 0;
+int xoffset = 0, yoffset = 0;
 bool slave = false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
@@ -175,7 +175,7 @@ void usage(const char *prog)
 	fprintf(stderr, "   -shuffle file list.\n");
 	fprintf(stderr, "   -bilinear Turn on bilinear interpolation.\n");
 	fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
-    fprintf(stderr, "   -xoffset ##  The number of pixels to offset the image in the X direction. Positive values move the image to the left.\n");
+    fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X or Y direction. Positive values move the image to the left / down.\n");
 	fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
 	fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on\n");
 	fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
@@ -841,39 +841,35 @@ void *async_fill_part(void *bounds)
 
 void fill()
 {
-    int x, y, i, r, g, b, idx, ix, iy;
+    int sx, sy, i, r, g, b, idx, ix, iy;
     
     if (imgCurrent == NULL) return;
 
-    idx = xoffset;
-    // X and Y will be screen coordinates
-    for (y = 0; y < h; y++) {
-        for (x = 0; x < w; x++) {
-            // ix and iy are image coordinates
-            ix = x * z + dx;
-            iy = y * z + dy;
+    memset(data, 0xff, 4 * w * h);
 
-            if (iy > imgCurrent->h || ix > imgCurrent->w || iy < 0 || ix < 0) {
-                r = 255; b = 255; g = 255;
-            } else {
-                // i is the location in the data array of the image coordinates ix and iy
-                i = 3 * (imgCurrent->w * iy + ix);
+    for (sy = 0; sy < h; sy++) {
+        if (sy < -dy || sy > -(dy - imgCurrent->h))
+            continue;
+        for (sx = 0; sx < w; sx++) {
+            if (sx < -dx || sx > -(dx - imgCurrent->w))
+                continue;
 
-                // Image is stored bgr
-                b = imgCurrent->buf[i];
-                g = imgCurrent->buf[i+1];
-                r = imgCurrent->buf[i+2];
-//                b >>= imgCurrent->nbits;
-//                g >>= imgCurrent->nbits;
-//                r >>= imgCurrent->nbits;
-            }
+            ix = sx + dx;
+            iy = sy + dy;
+
+            i = 3 * (imgCurrent->w * iy + ix);
+
+            // Image is stored bgr
+            b = imgCurrent->buf[i];
+            g = imgCurrent->buf[i+1];
+            r = imgCurrent->buf[i+2];
+
+            idx = 4 * (w * sy + sx);
             data[idx++] = r;
-            data[idx++] = b;
             data[idx++] = g;
-            idx++;
-            idx %= 4 * w * h;
-        } // x
-    } // y
+            data[idx] = b;
+        } // sx
+    } // sy
 }
 
 // Asynchronous image filling
@@ -919,6 +915,7 @@ bool is_changed(void)
 // Set parameters so that image fit into window
 void full_extend()
 {
+    return;
 	if (!imgCurrent)
 		return;
 	a = 0;
@@ -1349,11 +1346,11 @@ void translate(float stepX, float stepY)
 
 void zoom(float zf)
 {
-	float xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
-	float yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 + dy;
+//	float xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
+//	float yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 + dy;
 	z = zf;
-	dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2);
-	dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
+//	dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2);
+//	dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
 
     send_coords();
 }
@@ -1590,6 +1587,13 @@ int main(int argc, char **argv)
 			browse = true;
 		} else if (0 == strcmp(argv[i], "-shuffle")) {
 			shuffle = true;
+		} else if (0 == strcmp(argv[i], "-yoffset")) {
+			if ((i + 1) < argc)
+				sscanf(argv[++i], "%d", &yoffset);
+			else {
+				usage(argv[0]);
+				exit(1);
+			}
 		} else if (0 == strcmp(argv[i], "-xoffset")) {
 			if ((i + 1) < argc)
 				sscanf(argv[++i], "%d", &xoffset);
@@ -1889,10 +1893,11 @@ int main(int argc, char **argv)
 						 ZPixmap, 0, (char *)data, w, h,
 						 32, 0);
 				// Keep image centered
-				dx = xp - (z * cos(a) * (w / 2) -
-					   z * sin(a) * (h / 2));
-				dy = yp - (z * sin(a) * (w / 2) +
-					   z * cos(a) * (h / 2));
+        //		XXX replace this
+		//		dx = xp - (z * cos(a) * (w / 2) -
+		//			   z * sin(a) * (h / 2));
+		//		dy = yp - (z * sin(a) * (w / 2) +
+		//			   z * cos(a) * (h / 2));
                 fill();
 			}
 		} else if (!slave && event.type == ButtonPress
