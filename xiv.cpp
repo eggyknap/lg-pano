@@ -851,11 +851,13 @@ void fill()
         if (sy < -dy || sy > -(dy - imgCurrent->h))
             continue;
         for (sx = 0; sx < w; sx++) {
-            if (sx < -dx || sx > -(dx - imgCurrent->w))
+            if (sx < -dx + xoffset || sx > -(dx - imgCurrent->w - xoffset))
                 continue;
 
-            ix = sx + dx;
+            ix = sx - xoffset + dx;
             iy = sy + dy;
+
+            if (ix < 0) continue;
 
             i = 3 * (imgCurrent->w * iy + ix);
 
