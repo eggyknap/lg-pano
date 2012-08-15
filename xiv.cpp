@@ -31,6 +31,7 @@
 #include <X11/Xutil.h>
 #include <X11/cursorfont.h>
 #include <X11/Xatom.h>
+#include <X11/extensions/XTest.h>
 #include <math.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -124,6 +125,7 @@ int nbfiles = 0;
 int idxfile = 0;
 bool shuffle = false;
 bool spacenav = false;
+bool is_changed = false;
 bool broadcast = false;
 char udphost[500] = "";
 int udpport = 0;
@@ -875,7 +877,7 @@ void fill()
 }
 
 // Asynchronous image filling
-bool is_changed(void)
+/*bool is_changed(void)
 {
 	static float za = 0, aa = 0, dxa = 0, dya = 0;
 	static float gma = 0;
@@ -912,7 +914,7 @@ bool is_changed(void)
     }
     else changed = false;
     return changed;
-}
+}*/
 
 // Set parameters so that image fit into window
 void full_extend()
@@ -1324,6 +1326,7 @@ void send_coords(void) {
 
 void translate(float stepX, float stepY)
 {
+    is_changed = true;
 	dx = dx - (-z * cos(a) * stepX - z * sin(a) * stepY);
 	dy = dy - (-z * sin(a) * stepX + z * cos(a) * stepY);
     
@@ -1348,6 +1351,7 @@ void translate(float stepX, float stepY)
 
 void zoom(float zf)
 {
+    is_changed = true;
 //	float xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
 //	float yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 + dy;
 	z = zf;
@@ -1367,6 +1371,16 @@ void next_image(int step)
 	if (idxfile < 0)
 		idxfile = nbfiles - 1;
 	display_image(files[idxfile]);
+}
+
+void draw_image(void)
+{
+    MutexProtect mwin(&mutexWin);
+    fill();
+    is_changed = false;
+    XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, w, h);
+    XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
+    //XFlush(display);
 }
 
 // Thread for spacenav
@@ -1395,6 +1409,8 @@ void *spacenav_handler(void *)
                     next_image(1);
                 }
             }
+            fill();
+            XTestFakeMotionEvent(display, screen, 10, 10, 0);
 		} else {
             usleep(100);
         }
@@ -1522,15 +1538,6 @@ void create_window(bool fs)
 	XMapWindow(display, window);
 }
 
-void draw_image(void)
-{
-    MutexProtect mwin(&mutexWin);
-    fill();
-    XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, w, h);
-    XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
-    //XFlush(display);
-}
-
 int main(int argc, char **argv)
 {
 
@@ -1542,7 +1549,10 @@ int main(int argc, char **argv)
 
 	XEvent event;
 
-	display = XOpenDisplay(NULL);
+	if (! (display = XOpenDisplay(NULL))) {
+        fprintf(stderr, "Cannot connect to X server\n");
+        exit(0);
+    }
 	screen = DefaultScreen(display);
 	visual = DefaultVisual(display, screen);
 	depth = DefaultDepth(display, screen);
@@ -1856,10 +1866,11 @@ int main(int argc, char **argv)
 	// Event Loop
 	do {
 		XNextEvent(display, &event);
+        fprintf(stderr, "got an event...\n");
 
 		MutexProtect mp(&mutexData);
 
-		if ((is_changed() || (event.type == Expose && event.xexpose.count < 1))
+		if ((is_changed || (event.type == Expose && event.xexpose.count < 1))
 		    && image != NULL && image->data != NULL) {
 			if (verbose)
 				fprintf(stderr, "Expose\n");
