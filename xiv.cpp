@@ -126,7 +126,7 @@ bool spacenav = false;
 bool broadcast = false;
 char udphost[500] = "";
 int udpport = 0;
-int xoffset = 0;
+int xoffset = 0, yoffset = 0;
 bool slave = false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
@@ -174,7 +174,7 @@ void usage(const char *prog)
 	fprintf(stderr, "   -shuffle file list.\n");
 	fprintf(stderr, "   -bilinear Turn on bilinear interpolation.\n");
 	fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
-    fprintf(stderr, "   -xoffset ##  The number of pixels to offset the image in the X direction. Positive values move the image to the left.\n");
+    fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
 	fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
 	fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on\n");
 	fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
@@ -726,116 +726,6 @@ void fill()
 		bounds[1] = h;
 		async_fill_part(bounds);
 	}
-
-	// Display the grid
-	if (displayGrid)
-		draw_grid(w, h, ncells, data);
-
-	// Display the points
-	if (displayPts) {
-		float caz = cos(a) / z;
-		float saz = sin(a) / z;
-
-		for (int p = 0; p < 10; p++) {
-			float xp = pts[2 * p];
-			float yp = pts[2 * p + 1];
-			if (xp >= 0) {
-				int wx =
-				    (int)(caz * (xp - dx) + saz * (yp - dy));
-				int wy =
-				    (int)(-saz * (xp - dx) + caz * (yp - dy));
-
-				for (int dwy = -crossSize; dwy <= crossSize;
-				     dwy++) {
-					for (int dwx = -crossSize;
-					     dwx <= crossSize; dwx++) {
-						if ((wx + dwx) >= 0
-						    && (wy + dwy) >= 0
-						    && (wx + dwx) < w
-						    && (wy + dwy) < h) {
-							int idx =
-							    4 * ((wy + dwy) *
-								 w + (wx +
-								      dwx));
-							if (displayPts
-							    && (dwx == 0
-								|| dwy == 0)) {
-								data[idx] =
-								    data[idx] >
-								    128 ? 0 :
-								    255;
-								idx++;
-								data[idx] =
-								    data[idx] >
-								    128 ? 0 :
-								    255;
-								idx++;
-								data[idx] =
-								    data[idx] >
-								    128 ? 0 :
-								    255;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	// Display histogram & radiometry transformation
-	if (displayHist && histMax == 0)
-		compute_histogram(imgCurrent, histr, histg, histb, histMax);
-	if (displayHist && osdSize && osdSize < h && histMax)
-		draw_histogram(imgCurrent, w, h, data, histr, histg, histb,
-			       histMax, osdSize, lu, cr, powv);
-
-	// Display overview un the lower right corner
-	if (displayQuickview && osdSize && osdSize < h) {
-		int zn = max(imgCurrent->w, imgCurrent->h) / osdSize;
-		if (zn == 0)
-			zn = 1;
-		int dw = (osdSize - (imgCurrent->w / zn));
-		int dh = h - osdSize + (osdSize - (imgCurrent->h / zn));
-
-		float caz = cos(a) / z;
-		float saz = sin(a) / z;
-
-		for (int i = 0; i < imgCurrent->h / zn; i++) {
-			int idx1 = w * (i + dh);
-			int cst1 = w - osdSize + dw;
-			int in = i * zn;
-			for (int j = 0; j < imgCurrent->w / zn; j++) {
-				int idx2 = 4 * (idx1 + cst1 + j);
-				int jn = j * zn;
-				int r = 0, g = 0, b = 0;
-				pixel(in, j * zn, r, g, b);
-
-				int xw =
-				    (int)((jn - dx) * caz + (in - dy) * saz);
-				int yw =
-				    (int)((dx - jn) * saz + (in - dy) * caz);
-				// Draker when outside of viewed area
-				// Blue if z<1, Green if z=1 and Red if z>1
-				if (xw < 0 || xw >= w || yw < 0 || yw >= h) {
-					if (z >= 1)
-						r /= 2;
-					else
-						r /= 3;
-					if (z == 1)
-						g /= 2;
-					else
-						g /= 3;
-					if (z >= 1)
-						b /= 3;
-					else
-						b /= 2;
-				}
-
-				data[idx2++] = r;
-				data[idx2++] = g;
-				data[idx2] = b;
-			}
-		}
-	}
 }
 
 // Asynchronous image filling
@@ -879,41 +769,10 @@ void *async_fill(void *)
 				MutexProtect mwin(&mutexWin);
 				fill();
 
-				XPutImage(display, window, gc, image, 0, 0, 0,
-					  0, w, h);
+                //XClearWindow(display, window);
+				XPutImage(display, window, gc, image, 0, 0, 0, 0, w, h);
+				//XPutImage(display, window, gc, image, xoffset - dx, yoffset - dy, 0, 0, w, h);
 
-				// Add labels to points
-				if (displayPts) {
-					float caz = cos(a) / z;
-					float saz = sin(a) / z;
-
-					for (int p = 0; p < 10; p++) {
-						float xp = pts[2 * p];
-						float yp = pts[2 * p + 1];
-						if (xp >= 0) {
-							int wx =
-							    (int)(caz *
-								  (xp - dx) +
-								  saz * (yp -
-									 dy));
-							int wy =
-							    (int)(-saz *
-								  (xp - dx) +
-								  caz * (yp -
-									 dy));
-							XDrawImageString
-							    (display, window,
-							     gc, wx + 8, wy - 8,
-							     ptsNames[p],
-							     p == 9 ? 2 : 1);
-						}
-					}
-				}
-				if (displayAbout) {
-					XDrawImageString(display, window, gc, 8,
-							 (3 * h) / 4, about,
-							 strlen(about));
-				}
 				XFlush(display);
 			}
 		} else		// Otherwise, just wait ...
@@ -1589,6 +1448,13 @@ int main(int argc, char **argv)
 			browse = true;
 		} else if (0 == strcmp(argv[i], "-shuffle")) {
 			shuffle = true;
+		} else if (0 == strcmp(argv[i], "-yoffset")) {
+			if ((i + 1) < argc)
+				sscanf(argv[++i], "%d", &yoffset);
+			else {
+				usage(argv[0]);
+				exit(1);
+			}
 		} else if (0 == strcmp(argv[i], "-xoffset")) {
 			if ((i + 1) < argc)
 				sscanf(argv[++i], "%d", &xoffset);
@@ -1856,8 +1722,11 @@ int main(int argc, char **argv)
 			MutexProtect mwin(&mutexWin);
 			if (verbose)
 				fprintf(stderr, "Expose\n");
-			XPutImage(display, window, gc, image, 0, 0, 0, 0, w, h);
-			XFlush(display);
+            refresh = true;
+            //XClearWindow(display, window);
+			//XPutImage(display, window, gc, image, 0, 0, 0, 0, w, h);
+			//XPutImage(display, window, gc, image, xoffset - dx, yoffset - dy, 0, 0, w, h);
+			//XFlush(display);
 		} else if (event.type == ConfigureNotify)	// Handle window resizing
 		{
 			if (verbose)
