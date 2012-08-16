@@ -676,18 +676,6 @@ void *async_fill_part(void *bounds)
 			data[idx + 1] = (unsigned char)g;
 			data[idx + 2] = (unsigned char)b;
 
-			if (displayZone &&
-			    ((((j == zx1) || (j == zx2))
-			      && (((i >= zy1) && (i <= zy2))
-				  || ((i >= zy2) && (i <= zy1))))
-			     || (((i == zy1) || (i == zy2))
-				 && (((j >= zx1) && (j <= zx2))
-				     || ((j >= zx2) && (j <= zx1)))))) {
-				data[idx] ^= -1;
-				data[idx + 1] ^= -1;
-				data[idx + 2] ^= -1;
-			}
-
 			idx += 4;
 		}
 	}
