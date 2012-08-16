@@ -60,6 +60,7 @@ int screen;
 int depth;
 GC gc;
 XImage *image = NULL;
+Pixmap pixmap;
 Cursor watch;			// Wait cursor
 Cursor normal;			// Normal cursor
 Atom wmDeleteMessage;
@@ -758,7 +759,8 @@ void *async_fill(void *)
 				fill();
 
                 //XClearWindow(display, window);
-				XPutImage(display, window, gc, image, 0, 0, 0, 0, w, h);
+				XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, w, h);
+				XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
 				//XPutImage(display, window, gc, image, xoffset - dx, yoffset - dy, 0, 0, w, h);
 
 				XFlush(display);
@@ -1749,6 +1751,8 @@ int main(int argc, char **argv)
 					   z * sin(a) * (h / 2));
 				dy = yp - (z * sin(a) * (w / 2) +
 					   z * cos(a) * (h / 2));
+
+                pixmap = XCreatePixmap(display, window, w, h, depth);
 			}
 		} else if (!slave && event.type == ButtonPress
             && event.xbutton.button == Button2) {
