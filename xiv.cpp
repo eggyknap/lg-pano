@@ -1346,16 +1346,18 @@ void translate(float stepX, float stepY)
     //    dx, z, dx / z, imgCurrent->w, w);
 
     // Constrain movement so the image stays at least somewhat on the screen
-    if (dy > imgCurrent->h - 10)
-        dy = imgCurrent->h - 10;
-    if (dy / z < -h + 10)
-        dy = z * (-h + 10);
-    if (dx > imgCurrent->w - 10)
-        dx = imgCurrent->w - 10;
-    if (dx / z < -w + 10)
-        dx = (10 -w) * z;
+    if (imgCurrent != 0) {
+        if (dy > imgCurrent->h - 10)
+            dy = imgCurrent->h - 10;
+        if (dy / z < -h + 10)
+            dy = z * (-h + 10);
+        if (dx > imgCurrent->w - 10)
+            dx = imgCurrent->w - 10;
+        if (dx / z < -w + 10)
+            dx = (10 -w) * z;
 
-    send_coords();
+        send_coords();
+    }
 }
 
 void zoom(float zf)
