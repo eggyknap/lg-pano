@@ -628,8 +628,8 @@ void *async_fill_part(void *bounds)
     int *p = (int *)bounds;
     for (int i = p[0]; i < p[1]; i++) {
         int idx = 4 * w * i;
-        float mix = dx - zsa * i;
-        float miy = zca * i + dy;
+        float mix = (z * xoffset) + dx - zsa * i;
+        float miy = zca * i + dy + (z * yoffset);
         float x = mix;
         float y = miy;
         for (int j = 0; j < w; j++) {
