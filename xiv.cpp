@@ -41,6 +41,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include "xiv.h"
 #include "xiv_utils.h"
@@ -126,7 +127,9 @@ bool shuffle = false;
 bool spacenav = false;
 bool broadcast = false;
 bool multicast = false;
-char udphost[500] = "";
+char **udphosts;
+int num_hosts = 0;
+int num_allocd_hosts = 0;
 int udpport = 0;
 int xoffset = 0, yoffset = 0;
 bool slave = false;
@@ -178,7 +181,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
-    fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group\n");
+    fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. When not in slave mode, can be repeated to send traffic to multiple addresses\n");
     fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
     fprintf(stderr, "   -broadcast include this option if -udphost is a broadcast address\n");
     fprintf(stderr, "   -multicast if -udphost is a multicast group, include this option. Only useful on slave instances\n");
@@ -1109,6 +1112,7 @@ void *udp_handler(void *) {
     struct sockaddr_in addr;
     sync_struct data;
     struct hostent *server;
+    struct ip_mreq mreq;
 
     recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (recv_socket == 0) {
@@ -1118,13 +1122,18 @@ void *udp_handler(void *) {
     memset(&addr, 0, sizeof(sockaddr_in));
     addr.sin_family = AF_INET;
 
-    if (udphost[0] != 0) {
-        server = gethostbyname(udphost);
-        if (server == NULL) {
-            perror("Couldn't figure out host to bind to");
-            exit(0);
+    if (num_hosts != 0) {
+        if (! multicast) {
+            server = gethostbyname(udphosts[0]);
+            if (server == NULL) {
+                perror("Couldn't figure out host to bind to");
+                exit(0);
+            }
+            memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
         }
-        memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+        else {
+            addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        }
     }
     else {
         addr.sin_addr.s_addr = INADDR_ANY;
@@ -1133,6 +1142,15 @@ void *udp_handler(void *) {
     if (bind(recv_socket, (sockaddr *) &addr, sizeof(addr)) < 0) {
         perror("Couldn't bind socket");
         exit(0);
+    }
+
+    if (multicast) {
+        mreq.imr_multiaddr.s_addr = inet_addr(udphosts[0]);
+        mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+        if (setsockopt(recv_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+            perror("Problem joining multicast group");
+            exit(1);
+        }
     }
 
     while (1) {
@@ -1150,42 +1168,51 @@ void *udp_handler(void *) {
     return 0;
 }
 
-int send_socket = 0;
+int *send_sockets;
+int num_sockets = 0;
 
 void send_coords(void) {
     sync_struct a;
+    int i;
 
     if (slave || udpport == 0) {
         return;
     }
 
-    if (send_socket == 0) {
+    if (num_sockets == 0) {
         struct sockaddr_in addr;
         struct hostent *server;
         int dummy = 1;
 
-        if (verbose) {
-            fprintf(stderr, "Opening socket to %s:%d\n", udphost, udpport);
+        send_sockets = (int *) malloc(sizeof(int) * num_hosts);
+        if (! send_sockets) {
+            perror("Couldn't allocate memory for sockets");
+            exit(1);
         }
-        send_socket = socket(AF_INET, SOCK_DGRAM, 0);
-        if (broadcast)
-            setsockopt(send_socket, SOL_SOCKET, SO_BROADCAST, &dummy, sizeof(int));
-        if (send_socket == 0) {
-            perror("Couldn't open socket");
-            exit(0);
-        }
-        server = gethostbyname(udphost);
-        if (server == NULL) {
-            perror("Couldn't figure out host");
-            exit(0);
-        }
+        for (i = 0; i < num_hosts; i++) {
+            if (verbose) {
+                fprintf(stderr, "Opening socket to %s:%d\n", udphosts[i], udpport);
+            }
+            send_sockets[i] = socket(AF_INET, SOCK_DGRAM, 0);
+            if (send_sockets[i] == 0) {
+                perror("Couldn't open socket");
+                exit(0);
+            }
+            if (broadcast)
+                setsockopt(send_sockets[i], SOL_SOCKET, SO_BROADCAST, &dummy, sizeof(int));
+            server = gethostbyname(udphosts[i]);
+            if (server == NULL) {
+                perror("Couldn't figure out host");
+                exit(0);
+            }
 
-        memset(&addr, 0, sizeof(sockaddr_in));
-        addr.sin_family = AF_INET;
-        memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
-        addr.sin_port = htons(udpport);
-        if (connect(send_socket, (sockaddr *) &addr, sizeof(addr)) < 0) {
-            perror("Error connecting UDP client");
+            memset(&addr, 0, sizeof(sockaddr_in));
+            addr.sin_family = AF_INET;
+            memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+            addr.sin_port = htons(udpport);
+            if (connect(send_sockets[i], (sockaddr *) &addr, sizeof(addr)) < 0) {
+                perror("Error connecting UDP client");
+            }
         }
     }
 
@@ -1194,8 +1221,10 @@ void send_coords(void) {
     a.dy = dy;
     a.z = z;
 
-    if (write(send_socket, &a, sizeof(a)) <= 0 && verbose) {
-        fprintf(stderr, "Write returned 0 or -1; writing may have failed\n");
+    for (i = 0; i < num_hosts; i++) {
+        if (write(send_sockets[i], &a, sizeof(a)) <= 0 && verbose) {
+            fprintf(stderr, "Write returned 0 or -1; writing to %s may have failed\n", udphosts[i]);
+        }
     }
 }
 
@@ -1482,8 +1511,32 @@ int main(int argc, char **argv)
         } else if (0 == strcmp(argv[i], "-broadcast")) {
             broadcast = true;
         } else if (0 == strcmp(argv[i], "-udphost")) {
-            if ((i + 1) < argc)
-                sscanf(argv[++i], "%s", udphost);
+            if (num_hosts >= num_allocd_hosts) {
+                if (num_allocd_hosts == 0) {
+                    udphosts = (char **) malloc(sizeof(char*) * 5);
+                    if (udphosts == 0) {
+                        perror("Couldn't allocate memory for UDP hosts");
+                        exit(1);
+                    }
+                    num_allocd_hosts = 5;
+                }
+                else {
+                    num_allocd_hosts += 5;
+                    if (! realloc(udphosts, sizeof(char*)) * num_allocd_hosts) {
+                        perror("Couldn't resize memory allocation for UDP hosts");
+                        exit(1);
+                    }
+                }
+            }
+            if ((i + 1) < argc) {
+                udphosts[num_hosts] = (char *) malloc(sizeof(char) * strlen(argv[++i]));
+                if (udphosts[num_hosts] == 0) {
+                    perror("Couldn't allocate memory for new UDP host name");
+                    exit(1);
+                }
+                sscanf(argv[i], "%s", udphosts[num_hosts]);
+                num_hosts++;
+            }
             else {
                 usage(argv[0]);
                 exit(1);
