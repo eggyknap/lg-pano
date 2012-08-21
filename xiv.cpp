@@ -1198,6 +1198,7 @@ void send_coords(void) {
                 perror("Couldn't open socket");
                 exit(0);
             }
+            num_sockets++;
             if (broadcast)
                 setsockopt(send_sockets[i], SOL_SOCKET, SO_BROADCAST, &dummy, sizeof(int));
             server = gethostbyname(udphosts[i]);
@@ -1273,6 +1274,7 @@ void next_image(int step)
     if (idxfile < 0)
         idxfile = nbfiles - 1;
     display_image(files[idxfile]);
+    send_coords();
 }
 
 // Thread for spacenav
