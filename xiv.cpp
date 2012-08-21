@@ -31,6 +31,7 @@
 #include <X11/Xutil.h>
 #include <X11/cursorfont.h>
 #include <X11/Xatom.h>
+#include <X11/extensions/Xdbe.h>
 #include <math.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -61,7 +62,12 @@ int screen;
 int depth;
 GC gc;
 XImage *image = NULL;
-Pixmap pixmap;
+//Pixmap pixmap;
+XdbeBackBuffer d_backBuf;
+Drawable drawable;
+bool can_double_buff = false;     // Whether we've decided we can use double buffering with Xdbe
+bool do_double_buff = true;       // Should we double-buffer if we can?
+int major, minor;
 Cursor watch;             // Wait cursor
 Cursor normal;            // Normal cursor
 Atom wmDeleteMessage;
@@ -180,6 +186,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -bilinear Turn on bilinear interpolation.\n");
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
+    fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
     fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. When not in slave mode, can be repeated to send traffic to multiple addresses\n");
     fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
@@ -764,8 +771,18 @@ void *async_fill(void *)
                 fill();
 
                 //XClearWindow(display, window);
-                XPutImage(display, pixmap, gc, image, 0, 0, 0, 0, w, h);
-                XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
+                XPutImage(display, drawable, gc, image, 0, 0, 0, 0, w, h);
+                //XCopyArea(display, pixmap, window, gc, 0, 0, w, h, 0, 0);
+
+                if (do_double_buff && can_double_buff) {
+                    XdbeSwapInfo swapInfo;
+                    swapInfo.swap_window = window;
+                    swapInfo.swap_action = XdbeBackground;
+                    if (!XdbeSwapBuffers(display, &swapInfo, 1)) {
+                        fprintf(stderr, "Problem swapping buffers\n");
+                        return 0;
+                    }
+                }
                 //XPutImage(display, window, gc, image, xoffset - dx, yoffset - dy, 0, 0, w, h);
 
                 XFlush(display);
@@ -1397,10 +1414,30 @@ void create_window(bool fs)
         ww = XDisplayWidth(display, screen);
         wh = XDisplayHeight(display, screen);
     }
-    window = XCreateSimpleWindow(display, root,
-                     ox, oy, ww, wh, 0,
-                     BlackPixel(display, screen),
-                     WhitePixel(display, screen));
+
+    if (do_double_buff && can_double_buff) {
+        unsigned long xAttrMask = CWBackPixel;
+        XSetWindowAttributes xAttr;
+        xAttr.background_pixel = WhitePixel(display, screen);
+        window = XCreateWindow(display, root, ox, oy, ww, wh, 0, CopyFromParent, CopyFromParent, visual, xAttrMask, &xAttr);
+        if (!window) {
+            fprintf(stderr, "Problem creating double-buffered window\n");
+            exit(1);
+        }
+
+        d_backBuf = XdbeAllocateBackBufferName(display, window, XdbeBackground);
+        gc = XCreateGC(display, d_backBuf, 0, NULL);
+        XSetForeground(display, gc, BlackPixel(display, screen));
+        XSetBackground(display, gc, 0xFFA000);
+        drawable = d_backBuf;
+    }
+    else {
+        window = XCreateSimpleWindow(display, root,
+                        ox, oy, ww, wh, 0,
+                        BlackPixel(display, screen),
+                        WhitePixel(display, screen));
+        drawable = window;
+    }
 
     XSelectInput(display, window,
              ExposureMask | ButtonPressMask | ButtonReleaseMask |
@@ -1436,30 +1473,15 @@ int main(int argc, char **argv)
 
     XEvent event;
 
-    if (! (display = XOpenDisplay(NULL))) {
-        fprintf(stderr, "Cannot connect to X server\n");
-        exit(0);
-    }
-    screen = DefaultScreen(display);
-    visual = DefaultVisual(display, screen);
-    depth = DefaultDepth(display, screen);
-
-    w = XDisplayWidth(display, screen);
-    h = XDisplayHeight(display, screen);
-    wref = w;
-    href = h;
-
-    watch = XCreateFontCursor(display, XC_watch);
-    normal = XCreateFontCursor(display, XC_left_ptr);
-
     bool browse = false;
 
-    // Allocate file liste
+    // Allocate file list
     files = (char **)malloc(sizeof(char *) * MAX_NBFILES);
     if (files == NULL) {
         fprintf(stderr, "Not enough memory\n");
         exit(1);
     }
+
     // Analyse arguments
     for (int i = 1; i < argc; i++) {
         if (0 == strcmp(argv[i], "-geometry")) {
@@ -1500,6 +1522,8 @@ int main(int argc, char **argv)
                 usage(argv[0]);
                 exit(1);
             }
+        } else if (0 == strcmp(argv[i], "-nodoublebuf")) {
+            do_double_buff = false;
         } else if (0 == strcmp(argv[i], "-spacenav")) {
             spacenav = true;
             if (slave) {
@@ -1588,6 +1612,50 @@ int main(int argc, char **argv)
             }
         }
     }
+
+
+    if (! (display = XOpenDisplay(NULL))) {
+        fprintf(stderr, "Cannot connect to X server\n");
+        exit(0);
+    }
+
+    screen = DefaultScreen(display);
+    depth = DefaultDepth(display, screen);
+
+    if (do_double_buff && XdbeQueryExtension(display, &major, &minor)) {
+        fprintf(stderr, "xdbe (%d, %d) supported, so we'll double-buffer\n", major, minor);
+        Drawable screens[] = { DefaultRootWindow(display) };
+        int nscreens = 1;
+        XdbeScreenVisualInfo *info = XdbeGetVisualInfo(display, screens, &nscreens);
+        if (!info || nscreens < 1 || info->count < 1) {
+            fprintf(stderr, "No visuals support Xdbe\n");
+            exit(1);
+        }
+        XVisualInfo xvisinfo_temp1;
+        xvisinfo_temp1.visualid = info->visinfo[0].visual;
+        xvisinfo_temp1.screen = 0;
+        xvisinfo_temp1.depth = info->visinfo[0].depth;
+
+        int matches;
+        XVisualInfo *xvisinfo_match = XGetVisualInfo(display, VisualIDMask | VisualScreenMask | VisualDepthMask, &xvisinfo_temp1, &matches);
+        if (!xvisinfo_match || matches < 1) {
+            fprintf(stderr, "Couldn't match a visual with double buffering\n");
+            exit(1);
+        }
+        visual = xvisinfo_match->visual;
+        can_double_buff = true;
+    }
+    else {
+        visual = DefaultVisual(display, screen);
+    }
+
+    w = XDisplayWidth(display, screen);
+    h = XDisplayHeight(display, screen);
+    wref = w;
+    href = h;
+
+    watch = XCreateFontCursor(display, XC_watch);
+    normal = XCreateFontCursor(display, XC_left_ptr);
 
     if (spacenav) {
         pthread_create(&thSpacenav, NULL, spacenav_handler, 0);
@@ -1826,7 +1894,7 @@ int main(int argc, char **argv)
                 dy = yp - (z * sin(a) * (w / 2) +
                        z * cos(a) * (h / 2));
 
-                pixmap = XCreatePixmap(display, window, w, h, depth);
+                //pixmap = XCreatePixmap(display, window, w, h, depth);
             }
         } else if (!slave && event.type == ButtonPress
             && event.xbutton.button == Button2) {
