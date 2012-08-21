@@ -3483,16 +3483,20 @@ fi
 
 done
 
-for ac_header in X11/extensions/XTest.h
+for ac_header in X11/Xutil.h X11/extensions/Xdbe.h
 do :
-  ac_fn_cxx_check_header_mongrel "$LINENO" "X11/extensions/XTest.h" "ac_cv_header_X11_extensions_XTest_h" "$ac_includes_default"
-if test "x$ac_cv_header_X11_extensions_XTest_h" = xyes; then :
+  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+ac_fn_cxx_check_header_compile "$LINENO" "$ac_header" "$as_ac_Header" "
+#include <X11/Xlib.h>
+
+"
+if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_X11_EXTENSIONS_XTEST_H 1
+#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
 _ACEOF
 
 else
-  as_fn_error $? "Required library XTest not found" "$LINENO" 5
+  as_fn_error $? "Required library Xext not found" "$LINENO" 5
 fi
 
 done
@@ -3819,13 +3823,13 @@ else
   as_fn_error $? "Required library X11 not found" "$LINENO" 5
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for XTestFakeButtonEvent in -lXtst" >&5
-$as_echo_n "checking for XTestFakeButtonEvent in -lXtst... " >&6; }
-if ${ac_cv_lib_Xtst_XTestFakeButtonEvent+:} false; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for XdbeQueryExtension in -lXext" >&5
+$as_echo_n "checking for XdbeQueryExtension in -lXext... " >&6; }
+if ${ac_cv_lib_Xext_XdbeQueryExtension+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-lXtst  $LIBS"
+LIBS="-lXext  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -3835,33 +3839,35 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 #ifdef __cplusplus
 extern "C"
 #endif
-char XTestFakeButtonEvent ();
+char XdbeQueryExtension ();
 int
 main ()
 {
-return XTestFakeButtonEvent ();
+return XdbeQueryExtension ();
   ;
   return 0;
 }
 _ACEOF
 if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_Xtst_XTestFakeButtonEvent=yes
+  ac_cv_lib_Xext_XdbeQueryExtension=yes
 else
-  ac_cv_lib_Xtst_XTestFakeButtonEvent=no
+  ac_cv_lib_Xext_XdbeQueryExtension=no
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_Xtst_XTestFakeButtonEvent" >&5
-$as_echo "$ac_cv_lib_Xtst_XTestFakeButtonEvent" >&6; }
-if test "x$ac_cv_lib_Xtst_XTestFakeButtonEvent" = xyes; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_Xext_XdbeQueryExtension" >&5
+$as_echo "$ac_cv_lib_Xext_XdbeQueryExtension" >&6; }
+if test "x$ac_cv_lib_Xext_XdbeQueryExtension" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBXTST 1
+#define HAVE_LIBXEXT 1
 _ACEOF
 
-  LIBS="-lXtst $LIBS"
+  LIBS="-lXext $LIBS"
 
+else
+  as_fn_error $? "Required library Xext not found" "$LINENO" 5
 fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for exif_data_new_from_file in -lexif" >&5

@@ -37,6 +37,10 @@ AC_CHECK_FUNCS([readdir])
 AC_CHECK_FUNCS([closedir])
 AC_CHECK_HEADERS([X11/Xlib.h],,[AC_MSG_ERROR([Required library X11 not found])])
 AC_CHECK_HEADERS([X11/Xutil.h],,[AC_MSG_ERROR([Required library X11 not found])])
+AC_CHECK_HEADERS([X11/Xutil.h X11/extensions/Xdbe.h],,[AC_MSG_ERROR([Required library Xext not found])],
+[[
+#include <X11/Xlib.h>
+]])
 AC_CHECK_HEADERS([math.h])
 AC_CHECK_HEADERS([pthread.h])
 AC_CHECK_HEADERS([fcntl.h])
@@ -52,6 +56,7 @@ AC_CHECK_LIB(jpeg,jpeg_read_scanlines,,[AC_MSG_WARN([Required library JPEG not f
 AC_CHECK_LIB(tiff,TIFFReadScanline,,[AC_MSG_WARN([Required library TIFF not found])])
 AC_CHECK_LIB(pthread,pthread_create,,[AC_MSG_ERROR([Required library pthread not found])])
 AC_CHECK_LIB(X11,XOpenDisplay,,[AC_MSG_ERROR([Required library X11 not found])])
+AC_CHECK_LIB(Xext,XdbeQueryExtension,,[AC_MSG_ERROR([Required library Xext not found])])
 AC_CHECK_LIB(exif,exif_data_new_from_file,,[AC_MSG_WARN([Required library EXIF not found])])
 AC_C_CONST
 AC_FUNC_MALLOC
