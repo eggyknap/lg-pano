@@ -125,6 +125,7 @@ int idxfile = 0;
 bool shuffle = false;
 bool spacenav = false;
 bool broadcast = false;
+bool multicast = false;
 char udphost[500] = "";
 int udpport = 0;
 int xoffset = 0, yoffset = 0;
@@ -177,9 +178,10 @@ void usage(const char *prog)
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
-    fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on\n");
+    fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group\n");
     fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
     fprintf(stderr, "   -broadcast include this option if -udphost is a broadcast address\n");
+    fprintf(stderr, "   -multicast if -udphost is a multicast group, include this option. Only useful on slave instances\n");
     fprintf(stderr, "   -slave act as a slave, waiting for synchronization traffic on udphost:udpport\n");
     fprintf(stderr, "   -v verbose.\n");
     fprintf(stderr, "       Commands are:\n");
@@ -1106,6 +1108,7 @@ void *udp_handler(void *) {
     int recv_socket = 0;
     struct sockaddr_in addr;
     sync_struct data;
+    struct hostent *server;
 
     recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (recv_socket == 0) {
@@ -1114,7 +1117,18 @@ void *udp_handler(void *) {
     }
     memset(&addr, 0, sizeof(sockaddr_in));
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (udphost[0] != 0) {
+        server = gethostbyname(udphost);
+        if (server == NULL) {
+            perror("Couldn't figure out host to bind to");
+            exit(0);
+        }
+        memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
+    }
+    else {
+        addr.sin_addr.s_addr = INADDR_ANY;
+    }
     addr.sin_port = htons(udpport);
     if (bind(recv_socket, (sockaddr *) &addr, sizeof(addr)) < 0) {
         perror("Couldn't bind socket");
@@ -1463,6 +1477,8 @@ int main(int argc, char **argv)
             }
         } else if (0 == strcmp(argv[i], "-slave")) {
             slave = true;
+        } else if (0 == strcmp(argv[i], "-multicast")) {
+            multicast = true;
         } else if (0 == strcmp(argv[i], "-broadcast")) {
             broadcast = true;
         } else if (0 == strcmp(argv[i], "-udphost")) {
