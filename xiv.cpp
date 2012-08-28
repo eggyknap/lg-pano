@@ -130,6 +130,7 @@ char **files = 0;
 int nbfiles = 0;
 int idxfile = 0;
 bool shuffle = false;
+bool h360 = false;
 bool spacenav = false;
 char *spdev = NULL;
 bool broadcast = false;
@@ -188,6 +189,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
+    fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
     fprintf(stderr, "   -spdev the device name for the spacenav (default: /dev/input/spacenavigator)\n");
     fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. When not in slave mode, can be repeated to send traffic to multiple addresses\n");
@@ -282,355 +284,259 @@ void write_points(const char *file)
 // Return a pixel r,g and b value according to geometric and radiometric transformation.
 // r,g and b are between 0 and 255 even if the input image is 16 bits.
 // contrast, luminosity and gamma take advantage of the 16bits wide input to best convert to 8 bits.
-inline void pixel2(int ii, int ji, int &r, int &g, int &b)
-{
-    if (imgCurrent && ji >= 0 && ji < imgCurrent->w && ii >= 0
-        && ii < imgCurrent->h) {
-        int idx = 3 * (imgCurrent->w * ii + ji);
-        int val = 0;
-
-        if (imgCurrent->nb == 1)
-            val = imgCurrent->buf[idx];
-        else
-            val = *(((unsigned short *)imgCurrent->buf) + idx);
-
-        if (gm == 1) {
-            val *= cr;
-            val >>= imgCurrent->nbits;
-        } else {
-            val =
-                (int)(cr *
-                  powv[(val * 255) >> imgCurrent->nbits]) >> 8;
-        }
-
-        val += lu;
-
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
-
-        if (revert)
-            val = 255 - val;
-
-        b = val;
-
-        if (imgCurrent->nb == 1)
-            val = imgCurrent->buf[idx + 1];
-        else
-            val = *(((unsigned short *)imgCurrent->buf) + idx + 1);
-
-        if (gm == 1) {
-            val *= cr;
-            val >>= imgCurrent->nbits;
-        } else {
-            val =
-                (int)(cr *
-                  powv[(val * 255) >> imgCurrent->nbits]) >> 8;
-        }
-
-        val += lu;
-
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
-
-        if (revert)
-            val = 255 - val;
-
-        g = val;
-
-        if (imgCurrent->nb == 1)
-            val = imgCurrent->buf[idx + 2];
-        else
-            val = *(((unsigned short *)imgCurrent->buf) + idx + 2);
-
-        if (gm == 1) {
-            val *= cr;
-            val >>= imgCurrent->nbits;
-        } else {
-            val =
-                (int)(cr *
-                  powv[(val * 255) >> imgCurrent->nbits]) >> 8;
-        }
-
-        val += lu;
-
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
-
-        if (revert)
-            val = 255 - val;
-
-        r = val;
-    } else {
-        // Outside of the image, the world is white...
-        r = g = b = 255;
-    }
-}
-
 inline void pixel_gm_nb2(int ii, int ji, int &r, int &g, int &b)
 {
-    if (imgCurrent && ji >= 0 && ji < imgCurrent->w && ii >= 0
-        && ii < imgCurrent->h) {
-        int idx = 3 * (imgCurrent->w * ii + ji);
-        int val = 0;
+    int idx = 3 * (imgCurrent->w * ii + ji);
+    int val = 0;
 
-        val = *(((unsigned short *)imgCurrent->buf) + idx);
+    val = *(((unsigned short *)imgCurrent->buf) + idx);
 
-        val = (int)(cr * powv[(val * 255) >> imgCurrent->nbits]) >> 8;
+    val = (int)(cr * powv[(val * 255) >> imgCurrent->nbits]) >> 8;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        b = val;
+    b = val;
 
-        val = *(((unsigned short *)imgCurrent->buf) + idx + 1);
+    val = *(((unsigned short *)imgCurrent->buf) + idx + 1);
 
-        val = (int)(cr * powv[(val * 255) >> imgCurrent->nbits]) >> 8;
+    val = (int)(cr * powv[(val * 255) >> imgCurrent->nbits]) >> 8;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        g = val;
+    g = val;
 
-        val = *(((unsigned short *)imgCurrent->buf) + idx + 2);
+    val = *(((unsigned short *)imgCurrent->buf) + idx + 2);
 
-        val = (int)(cr * powv[(val * 255) >> imgCurrent->nbits]) >> 8;
+    val = (int)(cr * powv[(val * 255) >> imgCurrent->nbits]) >> 8;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        r = val;
-    } else {
-        // Outside of the image, the world is white...
-        r = g = b = 255;
-    }
+    r = val;
 }
 
 inline void pixel_gm_nb1(int ii, int ji, int &r, int &g, int &b)
 {
-    if (imgCurrent && ji >= 0 && ji < imgCurrent->w && ii >= 0
-        && ii < imgCurrent->h) {
-        int idx = 3 * (imgCurrent->w * ii + ji);
-        int val = 0;
+    int idx = 3 * (imgCurrent->w * ii + ji);
+    int val = 0;
 
-        val = imgCurrent->buf[idx];
+    val = imgCurrent->buf[idx];
 
-        val = (int)(cr * powv[val]) >> 8;
+    val = (int)(cr * powv[val]) >> 8;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        b = val;
+    b = val;
 
-        val = imgCurrent->buf[idx + 1];
+    val = imgCurrent->buf[idx + 1];
 
-        val = (int)(cr * powv[val]) >> 8;
+    val = (int)(cr * powv[val]) >> 8;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        g = val;
+    g = val;
 
-        val = imgCurrent->buf[idx + 2];
+    val = imgCurrent->buf[idx + 2];
 
-        val = (int)(cr * powv[val]) >> 8;
+    val = (int)(cr * powv[val]) >> 8;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        r = val;
-    } else {
-        // Outside of the image, the world is white...
-        r = g = b = 255;
-    }
+    r = val;
 }
 
 inline void pixel_gm1_nb2(int ii, int ji, int &r, int &g, int &b)
 {
-    if (imgCurrent && ji >= 0 && ji < imgCurrent->w && ii >= 0
-        && ii < imgCurrent->h) {
-        int idx = 3 * (imgCurrent->w * ii + ji);
-        int val = 0;
+    int idx = 3 * (imgCurrent->w * ii + ji);
+    int val = 0;
 
-        val = *(((unsigned short *)imgCurrent->buf) + idx);
+    val = *(((unsigned short *)imgCurrent->buf) + idx);
 
-        val *= cr;
-        val >>= imgCurrent->nbits;
+    val *= cr;
+    val >>= imgCurrent->nbits;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        b = val;
+    b = val;
 
-        val = *(((unsigned short *)imgCurrent->buf) + idx + 1);
+    val = *(((unsigned short *)imgCurrent->buf) + idx + 1);
 
-        val *= cr;
-        val >>= imgCurrent->nbits;
+    val *= cr;
+    val >>= imgCurrent->nbits;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        g = val;
+    g = val;
 
-        val = *(((unsigned short *)imgCurrent->buf) + idx + 2);
+    val = *(((unsigned short *)imgCurrent->buf) + idx + 2);
 
-        val *= cr;
-        val >>= imgCurrent->nbits;
+    val *= cr;
+    val >>= imgCurrent->nbits;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        r = val;
-    } else {
-        // Outside of the image, the world is white...
-        r = g = b = 255;
-    }
+    r = val;
 }
 
 inline void pixel_gm1_nb1(int ii, int ji, int &r, int &g, int &b)
 {
-    if (imgCurrent && ji >= 0 && ji < imgCurrent->w && ii >= 0
-        && ii < imgCurrent->h) {
-        int idx = 3 * (imgCurrent->w * ii + ji);
-        int val = 0;
+    int idx = 3 * (imgCurrent->w * ii + ji);
+    int val = 0;
 
-        val = imgCurrent->buf[idx];
+    val = imgCurrent->buf[idx];
 
-        val *= cr;
-        val >>= imgCurrent->nbits;
+    val *= cr;
+    val >>= imgCurrent->nbits;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        b = val;
+    b = val;
 
-        val = imgCurrent->buf[idx + 1];
+    val = imgCurrent->buf[idx + 1];
 
-        val *= cr;
-        val >>= imgCurrent->nbits;
+    val *= cr;
+    val >>= imgCurrent->nbits;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        g = val;
+    g = val;
 
-        val = imgCurrent->buf[idx + 2];
+    val = imgCurrent->buf[idx + 2];
 
-        val *= cr;
-        val >>= imgCurrent->nbits;
+    val *= cr;
+    val >>= imgCurrent->nbits;
 
-        val += lu;
+    val += lu;
 
-        if (val > 255)
-            val = 255;
-        if (val < 0)
-            val = 0;
+    if (val > 255)
+        val = 255;
+    if (val < 0)
+        val = 0;
 
-        if (revert)
-            val = 255 - val;
+    if (revert)
+        val = 255 - val;
 
-        r = val;
-    } else {
-        // Outside of the image, the world is white...
-        r = g = b = 255;
-    }
+    r = val;
 }
 
 inline void pixel(int ii, int ji, int &r, int &g, int &b)
 {
-    if (gm == 1) {
-        if (imgCurrent->nb == 1)
-            pixel_gm1_nb1(ii, ji, r, g, b);
-        else
-            pixel_gm1_nb2(ii, ji, r, g, b);
-    } else {
-        if (imgCurrent->nb == 1)
-            pixel_gm_nb1(ii, ji, r, g, b);
-        else
-            pixel_gm_nb2(ii, ji, r, g, b);
+    int ji2 = ji;
+
+    r = g = b = 255;
+
+    // Is the image loaded?
+    if (! imgCurrent) return;
+
+    if (h360 && (ji < 0 || ji >= imgCurrent->w)) {
+        while (ji2 < 0) ji2 += imgCurrent->w;
+        while (ji2 >= imgCurrent->w) ji2 -= imgCurrent->w;
     }
+    if (ji2 >= 0 && ji2 < imgCurrent->w && ii >= 0
+        && ii < imgCurrent->h) {
+        if (gm == 1) {
+            if (imgCurrent->nb == 1)
+                pixel_gm1_nb1(ii, ji2, r, g, b);
+            else
+                pixel_gm1_nb2(ii, ji2, r, g, b);
+        } else {
+            if (imgCurrent->nb == 1)
+                pixel_gm_nb1(ii, ji2, r, g, b);
+            else
+                pixel_gm_nb2(ii, ji2, r, g, b);
+        }
+    } else {
+        // Outside of the image, the world is white...
+        r = g = b = 255;
+    }
+
 }
 
 // Fill a part of the drawing area.
@@ -1263,9 +1169,9 @@ void translate(float stepX, float stepY)
             dy = imgCurrent->h - 10;
         if (dy / z < -h + 10)
             dy = z * (-h + 10);
-        if (dx > imgCurrent->w - 10)
+        if (dx > imgCurrent->w - 10 && !h360)
             dx = imgCurrent->w - 10;
-        if (dx / z < -w + 10)
+        if (dx / z < -w + 10 && !h360)
             dx = (10 -w) * z;
 
         send_coords();
@@ -1310,7 +1216,9 @@ void *spacenav_handler(void *)
             if (spev.type == SPNAV_MOTION) {
                 translate(-1 * spev.x / SPNAV_SENSITIVITY, spev.y / SPNAV_SENSITIVITY);
                 float zf = z - z * spev.z / 350.0 / SPNAV_SENSITIVITY;
-                if (zf < 0 || zf > 10) {
+
+                // Constrain zoom amount
+                if ((zf < 0 || zf > 10) && z > 0 && z < 10) {
                     zf = z;
                 } else
                     zoom(zf);
@@ -1521,8 +1429,8 @@ int main(int argc, char **argv)
                 usage(argv[0]);
                 exit(1);
             }
-        } else if (0 == strcmp(argv[i], "-nodoublebuf")) {
-            do_double_buff = false;
+        } else if (0 == strcmp(argv[i], "-h360")) {
+            h360 = true;
         } else if (0 == strcmp(argv[i], "-spacenav")) {
             spacenav = true;
             if (slave) {
