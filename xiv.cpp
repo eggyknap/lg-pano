@@ -1301,9 +1301,6 @@ void *spacenav_handler(void *)
 {
     spnav_event spev;
 
-    // XXX make this udev link not hardcoded. this really doesn't matter for
-    // now, though, because this is LG-specific, and each LG will have one of
-    // these links
     if (!init_spacenav(spdev == NULL ? "/dev/input/spacenavigator" : spdev)) {
         pthread_exit(0);
     }
