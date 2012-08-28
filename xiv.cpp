@@ -131,6 +131,7 @@ int nbfiles = 0;
 int idxfile = 0;
 bool shuffle = false;
 bool spacenav = false;
+char *spdev = NULL;
 bool broadcast = false;
 bool multicast = false;
 char **udphosts;
@@ -188,6 +189,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
+    fprintf(stderr, "   -spdev the device name for the spacenav (default: /dev/input/spacenavigator)\n");
     fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. When not in slave mode, can be repeated to send traffic to multiple addresses\n");
     fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
     fprintf(stderr, "   -broadcast include this option if -udphost is a broadcast address\n");
@@ -1302,7 +1304,7 @@ void *spacenav_handler(void *)
     // XXX make this udev link not hardcoded. this really doesn't matter for
     // now, though, because this is LG-specific, and each LG will have one of
     // these links
-    if (!init_spacenav("/dev/input/spacenavigator")) {
+    if (!init_spacenav(spdev == NULL ? "/dev/input/spacenavigator" : spdev)) {
         pthread_exit(0);
     }
 
@@ -1529,6 +1531,13 @@ int main(int argc, char **argv)
             if (slave) {
                 fprintf(stderr, "Cannot include -spacenav and -slave on the same command.");
                 exit(0);
+            }
+        } else if (0 == strcmp(argv[i], "-spdev")) {
+            if ((i + 1) < argc)
+                spdev = argv[++i];
+            else {
+                usage(argv[0]);
+                exit(1);
             }
         } else if (0 == strcmp(argv[i], "-slave")) {
             slave = true;
