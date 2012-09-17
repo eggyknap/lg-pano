@@ -140,7 +140,7 @@ int num_hosts = 0;
 int num_allocd_hosts = 0;
 int udpport = 0;
 int xoffset = 0, yoffset = 0;
-bool slave = false;
+bool slavemode = false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
 int powv[256];
@@ -196,7 +196,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
     fprintf(stderr, "   -broadcast include this option if -udphost is a broadcast address\n");
     fprintf(stderr, "   -multicast if -udphost is a multicast group, include this option. Only useful on slave instances\n");
-    fprintf(stderr, "   -slave act as a slave, waiting for synchronization traffic on udphost:udpport\n");
+    fprintf(stderr, "   -slavemode act as a slave, waiting for synchronization traffic on udphost:udpport\n");
     fprintf(stderr, "   -v verbose.\n");
     fprintf(stderr, "       Commands are:\n");
     fprintf(stderr, "         o l filename: load a new image\n");
@@ -1100,7 +1100,7 @@ void send_coords(void) {
     sync_struct a;
     int i;
 
-    if (slave || udpport == 0) {
+    if (slavemode || udpport == 0) {
         return;
     }
 
@@ -1296,7 +1296,7 @@ void quit()
         pthread_cancel(thSpacenav);
         pthread_join(thSpacenav, &r);
     }
-    if (slave) {
+    if (slavemode) {
         pthread_cancel(thUDPSlave);
         pthread_join(thUDPSlave, &r);
     }
@@ -1433,8 +1433,8 @@ int main(int argc, char **argv)
             h360 = true;
         } else if (0 == strcmp(argv[i], "-spacenav")) {
             spacenav = true;
-            if (slave) {
-                fprintf(stderr, "Cannot include -spacenav and -slave on the same command.");
+            if (slavemode) {
+                fprintf(stderr, "Cannot include -spacenav and -slavemode on the same command.");
                 exit(0);
             }
         } else if (0 == strcmp(argv[i], "-spdev")) {
@@ -1444,8 +1444,8 @@ int main(int argc, char **argv)
                 usage(argv[0]);
                 exit(1);
             }
-        } else if (0 == strcmp(argv[i], "-slave")) {
-            slave = true;
+        } else if (0 == strcmp(argv[i], "-slavemode")) {
+            slavemode = true;
         } else if (0 == strcmp(argv[i], "-multicast")) {
             multicast = true;
         } else if (0 == strcmp(argv[i], "-broadcast")) {
@@ -1509,8 +1509,8 @@ int main(int argc, char **argv)
         } else if (0 == strcmp(argv[i], "-fifo")) {
             if ((i + 1) < argc)
                 fifo = argv[++i];
-            if (slave) {
-                fprintf(stderr, "Cannot include -fifo and -slave on the same command.");
+            if (slavemode) {
+                fprintf(stderr, "Cannot include -fifo and -slavemode on the same command.");
                 exit(0);
             }
         } else {
@@ -1574,7 +1574,7 @@ int main(int argc, char **argv)
     if (spacenav) {
         pthread_create(&thSpacenav, NULL, spacenav_handler, 0);
     }
-    if (slave) {
+    if (slavemode) {
         pthread_create(&thUDPSlave, NULL, udp_handler, 0);
     }
     // Create the image cache.
@@ -1810,15 +1810,15 @@ int main(int argc, char **argv)
 
                 //pixmap = XCreatePixmap(display, window, w, h, depth);
             }
-        } else if (!slave && event.type == ButtonPress
+        } else if (!slavemode && event.type == ButtonPress
             && event.xbutton.button == Button2) {
             next_image(-1);
             send_coords();
-        } else if (!slave && event.type == ButtonPress
+        } else if (!slavemode && event.type == ButtonPress
             && event.xbutton.button == Button3) {
             next_image(1);
             send_coords();
-        } else if (!slave && event.type == ButtonPress
+        } else if (!slavemode && event.type == ButtonPress
             && event.xbutton.button == Button4) {
             // Wheel Forward
             Window r, wr;
@@ -1850,7 +1850,7 @@ int main(int argc, char **argv)
             dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
 
             send_coords();
-        } else if (!slave && event.type == ButtonPress
+        } else if (!slavemode && event.type == ButtonPress
             && event.xbutton.button == Button5) {
             // Wheel Backward
             Window r, wr;
@@ -1880,7 +1880,7 @@ int main(int argc, char **argv)
             dy = yp - (z * sin(a) * wx + z * cos(a) * wy);
 
             send_coords();
-        } else if (!slave && event.type == ButtonPress
+        } else if (!slavemode && event.type == ButtonPress
             && event.xbutton.button == Button1) {
             // Left is down
             leftdown = true;
@@ -1902,7 +1902,7 @@ int main(int argc, char **argv)
             }
 
             send_coords();
-        } else if (!slave && event.type == ButtonRelease
+        } else if (!slavemode && event.type == ButtonRelease
             && event.xbutton.button == Button1) {
             // Left is up
             leftdown = false;
@@ -1966,7 +1966,7 @@ int main(int argc, char **argv)
             }
 
             send_coords();
-        } else if (!slave && leftdown)    // Handle mouse based pan
+        } else if (!slavemode && leftdown)    // Handle mouse based pan
         {
             Window r, wr;
             int wx, wy, rx, ry;
@@ -2003,7 +2003,7 @@ int main(int argc, char **argv)
             {
                 write_points(files[idxfile]);
                 run = false;
-            } else if (! slave) {
+            } else if (! slavemode) {
                 if (0 == strcmp(c, "1") || 0 == strcmp(c, "2") || 0 == strcmp(c, "3") || 0 == strcmp(c, "4") || 0 == strcmp(c, "5") || 0 == strcmp(c, "6") || 0 == strcmp(c, "7") || 0 == strcmp(c, "8") || 0 == strcmp(c, "9"))    // Zoom level keep center view
                 {
                     xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
