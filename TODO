@@ -15,6 +15,9 @@ Liquid Galaxy version:
 * Make xiv complain when it gets command line options it doesn't understand.
   Right now it thinks they're image names. Perhaps it's best to complain when
   it gets an image name it can't find a file for.
+* Change spacenav buttons to cycle, instead of recentering image. Perhaps
+  holding the button for a while should recenter, but it's not so important to
+  recenter anymore since we have decent constraints on motion.
 
 Original version:
 -----------------
