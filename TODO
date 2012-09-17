@@ -18,6 +18,7 @@ Liquid Galaxy version:
 * Change spacenav buttons to cycle, instead of recentering image. Perhaps
   holding the button for a while should recenter, but it's not so important to
   recenter anymore since we have decent constraints on motion.
+* Prevent white borders from showing up with zoom levels, pan amounts
 
 Original version:
 -----------------
