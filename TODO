@@ -14,6 +14,9 @@ Liquid Galaxy version:
   left vs. right)
 * Make Xwindow class name and instance string command-line options, or at least
   predictable. The latter should be a cmd line option
+* Make xiv complain when it gets command line options it doesn't understand.
+  Right now it thinks they're image names. Perhaps it's best to complain when
+  it gets an image name it can't find a file for.
 
 Original version:
 -----------------
