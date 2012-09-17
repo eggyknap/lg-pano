@@ -53,6 +53,9 @@
     // decrease the sensitivity.
 #define SPNAV_SENSITIVITY 3.0
 
+#define MAX_SLAVES 30
+#define SLAVE_ADDR_LEN 100
+
 // X11 global variables
 pthread_mutex_t mutexWin = PTHREAD_MUTEX_INITIALIZER;    // Mutex protecting the window
 Display *display;
@@ -124,6 +127,14 @@ int histr[256];
 int histg[256];
 int histb[256];
 
+typedef struct {
+    char host[SLAVE_ADDR_LEN];
+    int port;
+    bool broadcast;
+    // XXX This multicast stuff might not work
+    bool multicast;
+} slavehost;
+
 // File list
 #define MAX_NBFILES 32768
 char **files = 0;
@@ -133,14 +144,15 @@ bool shuffle = false;
 bool h360 = false;
 bool spacenav = false;
 char *spdev = NULL;
-bool broadcast = false;
-bool multicast = false;
-char **udphosts;
-int num_hosts = 0;
-int num_allocd_hosts = 0;
-int udpport = 0;
+slavehost slavehosts[MAX_SLAVES];
+int num_slaves = 0;
+int num_allocd_slaves = 0;
+char *listenaddr = NULL;
+int listenport = 0;
 int xoffset = 0, yoffset = 0;
 bool slavemode = false;
+bool broadcast = false;
+bool multicast = false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
 int powv[256];
@@ -192,11 +204,15 @@ void usage(const char *prog)
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
     fprintf(stderr, "   -spdev the device name for the spacenav (default: /dev/input/spacenavigator)\n");
-    fprintf(stderr, "   -udphost <host> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. When not in slave mode, can be repeated to send traffic to multiple addresses\n");
-    fprintf(stderr, "   -udpport <port> port to send UDP synchronization traffic to, or to listen on\n");
-    fprintf(stderr, "   -broadcast include this option if -udphost is a broadcast address\n");
-    fprintf(stderr, "   -multicast if -udphost is a multicast group, include this option. Only useful on slave instances\n");
-    fprintf(stderr, "   -slavemode act as a slave, waiting for synchronization traffic on udphost:udpport\n");
+
+// XXX validate these
+    fprintf(stderr, "   -listenaddr <addr> address to listen on for UDP synchronization traffic to. Only useful if -slavemode is on\n");
+    fprintf(stderr, "   -listenport <port> port to listen on for UDP synchronization traffic to. Only useful if -slavemode is on\n");
+
+    fprintf(stderr, "   -slavemode act as a slave, waiting for synchronization traffic on listenhost:listenport. For predictable behavior, this should be the first command line option, when it is used at all\n");
+    fprintf(stderr, "   -slavehost <host>:<port> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. Can be repeated to send traffic to multiple addresses, up to a maximum of %d slaves. Useful only when -slavemode is not on\n", MAX_SLAVES);
+    fprintf(stderr, "   -broadcast include this option if the last -slavehost option on the command line thus far is a broadcast address, or as a slave, if the -listenaddr is a broadcast address\n");
+    fprintf(stderr, "   -multicast if the last -slavehost option on the command line thus far is a multicast group, or in -slavemode if the -listenaddr is a multicast addres, include this option. Only useful on slave instances. Along with -broadcast, this can be specified multiple times, once per -slavehost\n");
     fprintf(stderr, "   -v verbose.\n");
     fprintf(stderr, "       Commands are:\n");
     fprintf(stderr, "         o l filename: load a new image\n");
@@ -1047,9 +1063,9 @@ void *udp_handler(void *) {
     memset(&addr, 0, sizeof(sockaddr_in));
     addr.sin_family = AF_INET;
 
-    if (num_hosts != 0) {
+    if (listenaddr != NULL) {
         if (! multicast) {
-            server = gethostbyname(udphosts[0]);
+            server = gethostbyname(listenaddr);
             if (server == NULL) {
                 perror("Couldn't figure out host to bind to");
                 exit(0);
@@ -1063,14 +1079,14 @@ void *udp_handler(void *) {
     else {
         addr.sin_addr.s_addr = INADDR_ANY;
     }
-    addr.sin_port = htons(udpport);
+    addr.sin_port = htons(listenport);
     if (bind(recv_socket, (sockaddr *) &addr, sizeof(addr)) < 0) {
         perror("Couldn't bind socket");
         exit(0);
     }
 
     if (multicast) {
-        mreq.imr_multiaddr.s_addr = inet_addr(udphosts[0]);
+        mreq.imr_multiaddr.s_addr = inet_addr(slavehosts[0].host);
         mreq.imr_interface.s_addr = htonl(INADDR_ANY);
         if (setsockopt(recv_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
             perror("Problem joining multicast group");
@@ -1100,7 +1116,7 @@ void send_coords(void) {
     sync_struct a;
     int i;
 
-    if (slavemode || udpport == 0) {
+    if (slavemode || num_slaves == 0) {
         return;
     }
 
@@ -1109,14 +1125,14 @@ void send_coords(void) {
         struct hostent *server;
         int dummy = 1;
 
-        send_sockets = (int *) malloc(sizeof(int) * num_hosts);
+        send_sockets = (int *) malloc(sizeof(int) * num_slaves);
         if (! send_sockets) {
             perror("Couldn't allocate memory for sockets");
             exit(1);
         }
-        for (i = 0; i < num_hosts; i++) {
+        for (i = 0; i < num_slaves; i++) {
             if (verbose) {
-                fprintf(stderr, "Opening socket to %s:%d\n", udphosts[i], udpport);
+                fprintf(stderr, "Opening socket to %s:%d\n", slavehosts[i].host, slavehosts[i].port);
             }
             send_sockets[i] = socket(AF_INET, SOCK_DGRAM, 0);
             if (send_sockets[i] == 0) {
@@ -1124,9 +1140,9 @@ void send_coords(void) {
                 exit(0);
             }
             num_sockets++;
-            if (broadcast)
+            if (slavehosts[i].broadcast)
                 setsockopt(send_sockets[i], SOL_SOCKET, SO_BROADCAST, &dummy, sizeof(int));
-            server = gethostbyname(udphosts[i]);
+            server = gethostbyname(slavehosts[i].host);
             if (server == NULL) {
                 perror("Couldn't figure out host");
                 exit(0);
@@ -1135,7 +1151,7 @@ void send_coords(void) {
             memset(&addr, 0, sizeof(sockaddr_in));
             addr.sin_family = AF_INET;
             memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
-            addr.sin_port = htons(udpport);
+            addr.sin_port = htons(slavehosts[i].port);
             if (connect(send_sockets[i], (sockaddr *) &addr, sizeof(addr)) < 0) {
                 perror("Error connecting UDP client");
             }
@@ -1147,9 +1163,9 @@ void send_coords(void) {
     a.dy = dy;
     a.z = z;
 
-    for (i = 0; i < num_hosts; i++) {
+    for (i = 0; i < num_slaves; i++) {
         if (write(send_sockets[i], &a, sizeof(a)) <= 0 && verbose) {
-            fprintf(stderr, "Write returned 0 or -1; writing to %s may have failed\n", udphosts[i]);
+            fprintf(stderr, "Write returned 0 or -1; writing to %s:%d may have failed\n", slavehosts[i].host, slavehosts[i].port);
         }
     }
 }
@@ -1371,6 +1387,7 @@ void create_window(bool fs)
 
 int main(int argc, char **argv)
 {
+    char *dummy_pchar;
 
     if (argc > 1
         && (0 == strcmp(argv[1], "-h") || 0 == strcmp(argv[1], "--help"))) {
@@ -1447,43 +1464,62 @@ int main(int argc, char **argv)
         } else if (0 == strcmp(argv[i], "-slavemode")) {
             slavemode = true;
         } else if (0 == strcmp(argv[i], "-multicast")) {
-            multicast = true;
+            if (slavemode) {
+                multicast = true;
+            }
+            else if (num_slaves > 0) {
+                slavehosts[num_slaves].multicast = true;
+            }
+            else {
+                fprintf(stderr, "Please use -multicast only after the -slavemode or -slavehost options\n");
+                usage(argv[0]);
+                exit(1);
+            }
         } else if (0 == strcmp(argv[i], "-broadcast")) {
-            broadcast = true;
-        } else if (0 == strcmp(argv[i], "-udphost")) {
-            if (num_hosts >= num_allocd_hosts) {
-                if (num_allocd_hosts == 0) {
-                    udphosts = (char **) malloc(sizeof(char*) * 5);
-                    if (udphosts == 0) {
-                        perror("Couldn't allocate memory for UDP hosts");
-                        exit(1);
-                    }
-                    num_allocd_hosts = 5;
-                }
-                else {
-                    num_allocd_hosts += 5;
-                    if (! realloc(udphosts, sizeof(char*)) * num_allocd_hosts) {
-                        perror("Couldn't resize memory allocation for UDP hosts");
-                        exit(1);
-                    }
-                }
+            if (slavemode) {
+                broadcast = true;
+            }
+            else if (num_slaves > 0) {
+                slavehosts[num_slaves].broadcast = true;
+            }
+            else {
+                fprintf(stderr, "Please use -broadcast only after the -slavemode or -slavehost options\n");
+                usage(argv[0]);
+                exit(1);
+            }
+        } else if (0 == strcmp(argv[i], "-slavehost")) {
+            if (num_slaves >= MAX_SLAVES) {
+                fprintf(stderr, "You tried to allocate more than %d slaves. I'm afraid Ican't let you do that, Dave.\n", MAX_SLAVES);
+                exit(1);
             }
             if ((i + 1) < argc) {
-                udphosts[num_hosts] = (char *) malloc(sizeof(char) * strlen(argv[++i]));
-                if (udphosts[num_hosts] == 0) {
-                    perror("Couldn't allocate memory for new UDP host name");
+                dummy_pchar = strchr(argv[++i], ':');
+                if (dummy_pchar) {
+                    memset(slavehosts[num_slaves].host, 0, SLAVE_ADDR_LEN);
+                    strncpy(slavehosts[num_slaves].host, argv[i], dummy_pchar - argv[i]);
+                    slavehosts[num_slaves].port = atoi(dummy_pchar + 1);
+                    fprintf(stderr, "Added slave host %s:%d\n", slavehosts[num_slaves].host, slavehosts[num_slaves].port);
+                    num_slaves++;
+                }
+                else {
+                    fprintf(stderr, "I can't understand \"%s\". I expect something of the form addr:port\n", dummy_pchar);
                     exit(1);
                 }
-                sscanf(argv[i], "%s", udphosts[num_hosts]);
-                num_hosts++;
             }
             else {
                 usage(argv[0]);
                 exit(1);
             }
-        } else if (0 == strcmp(argv[i], "-udpport")) {
+        } else if (0 == strcmp(argv[i], "-listenaddr")) {
             if ((i + 1) < argc)
-                sscanf(argv[++i], "%d", &udpport);
+                listenaddr = argv[++i];
+            else {
+                usage(argv[0]);
+                exit(1);
+            }
+        } else if (0 == strcmp(argv[i], "-listenport")) {
+            if ((i + 1) < argc)
+                sscanf(argv[++i], "%d", &listenport);
             else {
                 usage(argv[0]);
                 exit(1);
