@@ -1044,7 +1044,7 @@ void rotate(float da)
 }
 
 typedef struct {
-    int flag;
+    int flag, img_idx;
     float dx, dy, z;
 } sync_struct;
 
@@ -1099,11 +1099,20 @@ void *udp_handler(void *) {
             data.flag == 1234) {
             // Do something here with what we've received
             if (verbose) {
-                fprintf(stderr, "%d, %f, %f, %f\n", data.flag, data.dx, data.dy, data.z);
+                fprintf(stderr, "%d, %d, %f, %f, %f\n", data.img_idx, data.flag, data.dx, data.dy, data.z);
+            }
+
+            if (idxfile != data.img_idx) {
+                if (data.img_idx >= nbfiles || data.img_idx < 0) {
+                    fprintf(stderr, "ERROR: Tried to cycle past the end of the image list (idxfile = %d, nbfiles = %d). Is the list of images on your command line identical to the master, and do all the images actually exist?\n", data.img_idx, nbfiles);
+                    exit(1);
+                }
+                display_image(files[data.img_idx]);
             }
             dx = data.dx;
             dy = data.dy;
             z = data.z;
+            idxfile = data.img_idx;
         }
     }
     return 0;
@@ -1162,6 +1171,7 @@ void send_coords(void) {
     a.dx = dx;
     a.dy = dy;
     a.z = z;
+    a.img_idx = idxfile;
 
     for (i = 0; i < num_slaves; i++) {
         if (write(send_sockets[i], &a, sizeof(a)) <= 0 && verbose) {
