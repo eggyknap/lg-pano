@@ -1,13 +1,12 @@
 Liquid Galaxy version:
 ----------------------
+* Allow iamge cycling to be synchronized
 * "When we put a scratched DVD in the player and it glitches, the kids say it's
   "scratching". They say that about the pano viewer, too. I'd like to fix that."
 * The initial sizing ought to be better, so that more than just the central
   screen is involved.
 * It would be good to have settings that would restrict the navigability with
   respect to the top and bottom.
-* Specify slave hosts on the master's command line as "<address>:<port>", so they
-  don't all have to listen on the same port.
 * Create simple example documentation for running on a galaxy
 * Make mouse / spacenav sensitivity a command-line option
 * Also make spacenav axes a command-line option (move spnav left, image goes
