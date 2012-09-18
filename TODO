@@ -10,7 +10,6 @@ Liquid Galaxy version:
 * Make mouse / spacenav sensitivity a command-line option
 * Also make spacenav axes a command-line option (move spnav left, image goes
   left vs. right)
-* Make Xwindow class name and instance string command-line options
 * Make xiv complain when it gets command line options it doesn't understand.
   Right now it thinks they're image names. Perhaps it's best to complain when
   it gets an image name it can't find a file for.
