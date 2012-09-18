@@ -141,15 +141,23 @@ char **files = 0;
 int nbfiles = 0;
 int idxfile = 0;
 bool shuffle = false;
+
+// Control
 bool h360 = false;
 bool spacenav = false;
 char *spdev = NULL;
+int xoffset = 0, yoffset = 0;
+
+// X attributes
+char *win_name = NULL;
+char *win_class = NULL;
+
+// Sync and network stuff
 slavehost slavehosts[MAX_SLAVES];
 int num_slaves = 0;
 int num_allocd_slaves = 0;
 char *listenaddr = NULL;
 int listenport = 0;
-int xoffset = 0, yoffset = 0;
 bool slavemode = false;
 bool broadcast = false;
 bool multicast = false;
@@ -203,7 +211,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
-    fprintf(stderr, "   -spdev the device name for the spacenav (default: /dev/input/spacenavigator)\n");
+    fprintf(stderr, "   -spdev <dev> the device name for the spacenav (default: /dev/input/spacenavigator)\n");
 
 // XXX validate these
     fprintf(stderr, "   -listenaddr <addr> address to listen on for UDP synchronization traffic to. Only useful if -slavemode is on\n");
@@ -213,6 +221,8 @@ void usage(const char *prog)
     fprintf(stderr, "   -slavehost <host>:<port> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. Can be repeated to send traffic to multiple addresses, up to a maximum of %d slaves. Useful only when -slavemode is not on\n", MAX_SLAVES);
     fprintf(stderr, "   -broadcast include this option if the last -slavehost option on the command line thus far is a broadcast address, or as a slave, if the -listenaddr is a broadcast address\n");
     fprintf(stderr, "   -multicast if the last -slavehost option on the command line thus far is a multicast group, or in -slavemode if the -listenaddr is a multicast addres, include this option. Only useful on slave instances. Along with -broadcast, this can be specified multiple times, once per -slavehost\n");
+    fprintf(stderr, "   -winname <NAME> Set the window name to NAME\n");
+    fprintf(stderr, "   -winclass <NAME> Set the window class to NAME\n");
     fprintf(stderr, "   -v verbose.\n");
     fprintf(stderr, "       Commands are:\n");
     fprintf(stderr, "         o l filename: load a new image\n");
@@ -948,11 +958,31 @@ Image *load_image(const char *file)
     return img;
 }
 
+// Set WM_CLASS
+void set_class(void) {
+    XClassHint *xch;
+
+    if ((xch = XAllocClassHint())) {
+        xch->res_class = win_class;
+        xch->res_name = win_name;
+        XSetClassHint(display, window, xch);
+    }
+    else {
+        fprintf(stderr, "Couldn't allocate a class hint structure. Probably out of memory.\n");
+        exit(1);
+    }
+}
+
 // Set the title of the window
 void set_title(const char *file)
 {
     // Tell the WM what is the name of the window.
     char title[1024];
+
+    if (win_name != NULL) {
+        XStoreName(display, window, win_name);
+        return;
+    }
     if (imgCurrent)
         sprintf(title, "%s - %d x %d - %db - %d / %d", imgCurrent->name,
             imgCurrent->w, imgCurrent->h,
@@ -1390,6 +1420,8 @@ void create_window(bool fs)
                 PropModeReplace, (unsigned char *)&second, 1);
     }
     set_title("");
+    if (win_class != NULL)
+        set_class();
 
     // Display the window
     XMapWindow(display, window);
@@ -1442,6 +1474,20 @@ int main(int argc, char **argv)
             browse = true;
         } else if (0 == strcmp(argv[i], "-shuffle")) {
             shuffle = true;
+        } else if (0 == strcmp(argv[i], "-winname")) {
+            if ((i + 1) < argc)
+                win_name = argv[++i];
+            else {
+                usage(argv[0]);
+                exit(1);
+            }
+        } else if (0 == strcmp(argv[i], "-winclass")) {
+            if ((i + 1) < argc)
+                win_class = argv[++i];
+            else {
+                usage(argv[0]);
+                exit(1);
+            }
         } else if (0 == strcmp(argv[i], "-yoffset")) {
             if ((i + 1) < argc)
                 sscanf(argv[++i], "%d", &yoffset);
