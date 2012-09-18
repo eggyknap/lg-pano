@@ -1526,7 +1526,7 @@ int main(int argc, char **argv)
                 multicast = true;
             }
             else if (num_slaves > 0) {
-                slavehosts[num_slaves].multicast = true;
+                slavehosts[num_slaves-1].multicast = true;
             }
             else {
                 fprintf(stderr, "Please use -multicast only after the -slavemode or -slavehost options\n");
