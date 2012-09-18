@@ -49,10 +49,6 @@
 #include "xiv_readers.h"
 #include "read-event.h"
 
-    // XXX Don't hardcode the spacenav sensitivity factor. OBTW Larger numbers
-    // decrease the sensitivity.
-#define SPNAV_SENSITIVITY 3.0
-
 #define MAX_SLAVES 30
 #define SLAVE_ADDR_LEN 100
 
@@ -144,6 +140,7 @@ bool shuffle = false;
 // Control
 bool h360 = false;
 bool spacenav = false;
+float spsens = 3.0;
 char *spdev = NULL;
 int xoffset = 0, yoffset = 0;
 
@@ -209,6 +206,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
+    fprintf(stderr, "   -spsens ## Change spacenav sensitivity. Higher numbers mean less sensitivity. Default is 3.\n");
     fprintf(stderr, "   -spdev <dev> the device name for the spacenav (default: /dev/input/spacenavigator)\n");
     fprintf(stderr, "   -listenport <port> port to listen on for UDP synchronization traffic. Setting either this or listenaddr will disable mouse, keyboard, and spacenav input on this system. For predictable behavior, listenaddr or listenport should be the first option on the command line, if either is used.\n");
     fprintf(stderr, "   -listenaddr <addr> address to listen on for UDP synchronization traffic to. Will default to 0.0.0.0 if unspecified, and -listenport is used.\n");
@@ -1276,8 +1274,8 @@ void *spacenav_handler(void *)
     while (1) {
         if (get_spacenav_event(&spev)) {
             if (spev.type == SPNAV_MOTION) {
-                translate(-1 * spev.x / SPNAV_SENSITIVITY, spev.y / SPNAV_SENSITIVITY);
-                float zf = z - z * spev.z / 350.0 / SPNAV_SENSITIVITY;
+                translate(-1 * spev.x / spsens, spev.y / spsens);
+                float zf = z - z * spev.z / 350.0 / spsens;
 
                 zoom(zf);
             } else {
@@ -1509,6 +1507,13 @@ int main(int argc, char **argv)
             }
         } else if (0 == strcmp(argv[i], "-h360")) {
             h360 = true;
+        } else if (0 == strcmp(argv[i], "-spsens")) {
+            if ((i + 1) < argc)
+                sscanf(argv[++i], "%f", &spsens);
+            else {
+                usage(argv[0]);
+                exit(1);
+            }
         } else if (0 == strcmp(argv[i], "-spacenav")) {
             spacenav = true;
             if (slavemode) {
