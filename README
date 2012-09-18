@@ -23,75 +23,54 @@ Mouse interaction conflict with default LXDE mouse shortcuts. You need
 to change LXDE's mouse shortcuts (Alt+Wheel).
 
 Usage: 
+Run xiv without arguments for up-to-date usage information
 
-xiv v0.8
-Usage xiv [options] file1 file2...
-Options:
-   -geometry widthxheight+ox+oy, default is screen size
-   -threads # threads, default is to auto-detect # of cores.
-   -cache # images (default 5).
-   -no-autorot Disable auto rotate according to EXIF tags.
-   -no-overview Don't display overview.
-   -fullscreen.
-   -histogram Display histogram.
-   -grid Display grid.
-   -browse expand the list of files by browsing the directory of the first file.
-   -shuffle file list.
-   -fifo filename for incoming commands, default is no command file.
-   -v verbose.
-       Commands are:
-         o l filename: load a new image
-         o z zoom_level: if zoom_level <0 fit image in window
-         o c x y: Center view on (x,y) (image pixel coordinates system)
-         o m x y: Move view of (x,y) (image pixel coordinates system)
-         o q: quit
-xiv is a very simple and lightweight image viewer without UI but a X11 window and only controled by keys and mouse.
-As opposed to most of the image viewers, it does not rely on scrollbar for image panning.
-It is a powerful tool to analyse huge images.
-The Window is a view of the image in which you can zoom, pan, rotate...
-xiv reads natively 8 and 16 bits binary PPM and TIFF and JPEG images. It uses ImageMagick to convert other formats.
-Image drawing is performed in several threads for a better image analysis experience.
-Next image is preloaded during current image analysis.
-Shortcuts are:
-   - Key based:
-      o q/Q Quit
-      o n/p Next/previous image in the list
-      o Shift+n/p Next/previous x10 image in the list
-      o ' '/. Center view on pointer
-      o z/Z/+/i Zoom/Unzoom
-      o c/C Contrast
-      o g/G Gamma
-      o l/L Luminosity
-      o v   Reset Luminosity/Contrast
-      o i   Invert colors
-      o Fn  Memorize current pixel coordinate as nth point.
-      o s   Show/hide points.
-      o f   Toggle Full Screen.
-      o h   Toggle display histogram
-      o b   Toggle bilinear interpolation
-      o o   Toggle display overview
-      o m   Toggle displlay grid
-      o r/=/0 Reset view
-      o 1-9 Set zoom level to 1/1..9
-      o [Alt+]1-9 Set zoom level to 1..9
-      o Left/Right/Up/Down pan
-      o Shift+Left/Right/Up/Down fine pan
-      o / or * rotate around center of window by 90° increments rounding angle to n x 90°.
-      o Alt+Left/Right rotate around center of window
-      o Shift+Alt+Left/Right fine rotate around center of window
-   - Mouse based:
-      o Left button+Drag Pan
-      o Shift+Left button+Drag Upper-Left -> Lower Right : Zoom on zone, Lower-Right -> Upper Left Unzoom from zone.
-      o Wheel Zoom/Unzoom keeping pointer position
-      o Shift+Wheel Fine Zoom/Unzoom keeping pointer position
-      o Alt+Wheel Rotate around pointer
-      o Shift+Alt+Wheel Fine rotate around pointer
-      o Button middle Previous image
-      o Button right Next image
-Points input:
-   You can set up to 10 points using keys F1 to F10. If points are displayed (which is the default) you'll see them on top of the image.
-   At the end of the image viewing, the points are written to stdout (before switching to another image or quitting).
-Examples:
-  xiv -browse /images/image1.jpg: opens images1.jpg as well as every files in the /images directory.
-  xiv -shuffle /images/*: opens every files in /images in random order.
-Capabilities: PPM JPEG TIFF EXIF 
+LIQUID GALAXY USE
+
+For use on a Liquid Galaxy, there is one master instance, and several slave
+instances. The master sends UDP traffic to the slaves, so it needs to know what
+addresses to talk to. Specify these like this:
+
+    ./xiv -slavehost addr1:port1 -slavehost addr2:port2 ...
+
+If a slave address is a broadcast address, include the -broadcast option
+immediately after the corresponding -slavehost option:
+
+    ./xiv -slavehost addr1:port1 -broadcast -slavehost addr2:port2 ...
+
+Slaves are configured to listen for traffic as follows:
+
+    ./xiv -listenport 10801 image_file.jpg
+
+You can also specify what address to listen on:
+
+    ./xiv -listenaddr 10.42.0.3 -listenport 10801 image_file.jpg
+
+NOTES ON CONNECTIVITY, esp. RE: Liquid Galaxy
+
+Liquid Galaxies often have a single node running multiple displays. So multiple
+xiv instances will need to run on such nodes, each listening in a way that it
+can receive sync traffic. The easiest way to do this seems to be to have the
+master node send traffic to two different ports, both on the galaxy's broadcast
+address.
+
+    ./xiv -slavehost 10.42.0.255:10801 -broadcast -slavehost 10.42.0.255:10802 -broadcast ...
+
+Then one instance on each display listens on the first port, and the other on
+the second port. If one mode controls more than two displays, you'll need more
+ports, and the master will need to know about them.
+
+Other options we've tried include:
+
+* Multiple instances listen on the same port. Despite the apparently inaccurate
+  descriptions of the SO_REUSEADDR socket option available online, you
+  apparently can't have multiple programs using the same port at the same time.
+  socat sometimes appears to violate this principle; here more research might
+  be useful.
+
+* Broadcasting, and having each instance listen on a specific IP, giving each
+  node multiple IPs. Unfortunately it seems a socket will receive broadcast
+  traffic only if it is listening on 0.0.0.0.
+
+* Multicast. Unfortunately, like broadcast, it seems you can receive multicast
+  traffic only by listening on 0.0.0.0
