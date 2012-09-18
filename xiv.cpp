@@ -1538,7 +1538,7 @@ int main(int argc, char **argv)
                 broadcast = true;
             }
             else if (num_slaves > 0) {
-                slavehosts[num_slaves].broadcast = true;
+                slavehosts[num_slaves-1].broadcast = true;
             }
             else {
                 fprintf(stderr, "Please use -broadcast only after the -slavemode or -slavehost options\n");
