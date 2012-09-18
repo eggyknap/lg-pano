@@ -131,8 +131,6 @@ typedef struct {
     char host[SLAVE_ADDR_LEN];
     int port;
     bool broadcast;
-    // XXX This multicast stuff might not work
-    bool multicast;
 } slavehost;
 
 // File list
@@ -215,8 +213,8 @@ void usage(const char *prog)
     fprintf(stderr, "   -listenport <port> port to listen on for UDP synchronization traffic. Setting either this or listenaddr will disable mouse, keyboard, and spacenav input on this system. For predictable behavior, listenaddr or listenport should be the first option on the command line, if either is used.\n");
     fprintf(stderr, "   -listenaddr <addr> address to listen on for UDP synchronization traffic to. Will default to 0.0.0.0 if unspecified, and -listenport is used.\n");
     fprintf(stderr, "   -slavehost <host>:<port> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. Can be repeated to send traffic to multiple addresses, up to a maximum of %d slaves. Useful only when -listenaddr and -listenport are not used\n", MAX_SLAVES);
-    fprintf(stderr, "   -broadcast include this option if the last -slavehost option on the command line thus far is a broadcast address, or as a slave, if the -listenaddr is a broadcast address\n");
-    fprintf(stderr, "   -multicast if the last -slavehost option on the command line thus far is a multicast group, or in slave mode if the -listenaddr is a multicast address, include this option. Only useful on slave instances. Along with -broadcast, this can be specified multiple times, once per -slavehost\n");
+    fprintf(stderr, "   -broadcast include this option if the last -slavehost option on the command line thus far is a broadcast address. Not useful on slave instances.\n");
+    fprintf(stderr, "   -multicast Use this option if the -listenaddr is a multicast address. Only useful on slave instances.\n");
     fprintf(stderr, "   -winname <NAME> Set the window name to NAME\n");
     fprintf(stderr, "   -winclass <NAME> Set the window class to NAME\n");
     fprintf(stderr, "   -v verbose.\n");
@@ -1075,7 +1073,7 @@ typedef struct {
 } sync_struct;
 
 void *udp_handler(void *) {
-    int recv_socket = 0;
+    int recv_socket = 0, so_reuseaddr = 1;
     struct sockaddr_in addr;
     sync_struct data;
     struct hostent *server;
@@ -1099,6 +1097,7 @@ void *udp_handler(void *) {
             memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
         }
         else {
+            // In multicast mode, we need to listen on INADDR_ANY. We'll use -listenaddr later on
             addr.sin_addr.s_addr = htonl(INADDR_ANY);
         }
     }
@@ -1111,8 +1110,12 @@ void *udp_handler(void *) {
         exit(0);
     }
 
+    if (setsockopt(recv_socket, SOL_SOCKET, SO_REUSEADDR, &so_reuseaddr, sizeof so_reuseaddr) == -1) {
+        perror("Couldn't turn on SO_REUSEADDR");
+    }
+
     if (multicast) {
-        mreq.imr_multiaddr.s_addr = inet_addr(slavehosts[0].host);
+        mreq.imr_multiaddr.s_addr = inet_addr(listenaddr);
         mreq.imr_interface.s_addr = htonl(INADDR_ANY);
         if (setsockopt(recv_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
             perror("Problem joining multicast group");
@@ -1519,23 +1522,17 @@ int main(int argc, char **argv)
             if (slavemode) {
                 multicast = true;
             }
-            else if (num_slaves > 0) {
-                slavehosts[num_slaves-1].multicast = true;
-            }
             else {
-                fprintf(stderr, "Please use -multicast only after the -listenaddr, -listenport, or -slavehost options\n");
+                fprintf(stderr, "Use -multicast only in slave mode, after the -listenaddr or -listenport options\n");
                 usage(argv[0]);
                 exit(1);
             }
         } else if (0 == strcmp(argv[i], "-broadcast")) {
-            if (slavemode) {
-                broadcast = true;
-            }
-            else if (num_slaves > 0) {
+            if (! slavemode && num_slaves > 0) {
                 slavehosts[num_slaves-1].broadcast = true;
             }
             else {
-                fprintf(stderr, "Please use -broadcast only after the -listenaddr, -listenport, or -slavehost options\n");
+                fprintf(stderr, "Please use -broadcast only after a -slavehost option\n");
                 usage(argv[0]);
                 exit(1);
             }
