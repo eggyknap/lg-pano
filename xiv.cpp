@@ -1279,7 +1279,10 @@ void *spacenav_handler(void *)
 
                 zoom(zf);
             } else {
-                if (spev.type == SPNAV_BUTTON) {
+                // value == 0  means the button is coming up. Without this, it
+                // would cycle images both on press *and* on release, which
+                // gets irritating.
+                if (spev.type == SPNAV_BUTTON && spev.value == 0) {
                     next_image(1);
                 }
             }
