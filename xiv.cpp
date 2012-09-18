@@ -94,6 +94,7 @@ unsigned char *data = NULL;
 float dx = 0;            // Translation
 float dy = 0;
 float z = 1;             // Zoom
+float maxz = 10;
 float a = 0;             // Rotation
 bool autorot = true;
 int lu = 0;              // Luminosity
@@ -738,8 +739,10 @@ void full_extend()
     revert = false;
     z = (float)imgCurrent->w / (float)w;
     float z2 = (float)imgCurrent->h / (float)h;
-    if (z2 > z)
+    // Comment this out because we always want the image zoomed full height
+    //if (z2 > z)
         z = z2;
+    maxz = z;
 
     dx = imgCurrent->w / 2 - (z * cos(a) * (w / 2) - z * sin(a) * (h / 2));
     dy = imgCurrent->h / 2 - (z * sin(a) * (w / 2) + z * cos(a) * (h / 2));
@@ -1239,12 +1242,11 @@ void zoom(float zf)
 
     // Constrain zoom amount
     if (zf < 0) zf = 0;
-    if (zf > 10) zf = 10;
+    if (zf > maxz) zf = maxz;
 
     z = zf;
     dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2);
     dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
-    fprintf(stderr, "%f\n", z);
 
     send_coords();
 }
