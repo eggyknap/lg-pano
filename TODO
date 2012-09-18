@@ -2,9 +2,6 @@ Liquid Galaxy version:
 ----------------------
 * "When we put a scratched DVD in the player and it glitches, the kids say it's
   "scratching". They say that about the pano viewer, too. I'd like to fix that."
-* Create simple example documentation for running on a galaxy
-* Also make spacenav axes a command-line option (move spnav left, image goes
-  left vs. right)
 * Make xiv complain when it gets command line options it doesn't understand.
   Right now it thinks they're image names. Perhaps it's best to complain when
   it gets an image name it can't find a file for.

@@ -141,6 +141,7 @@ bool shuffle = false;
 bool h360 = false;
 bool spacenav = false;
 float spsens = 3.0;
+int swapaxes = 1;
 char *spdev = NULL;
 int xoffset = 0, yoffset = 0;
 
@@ -207,6 +208,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
     fprintf(stderr, "   -spsens ## Change spacenav sensitivity. Higher numbers mean less sensitivity. Default is 3.\n");
+    fprintf(stderr, "   -swapaxes Change spacenav axes so pushing the spacenav left moves the image right, etc.\n");
     fprintf(stderr, "   -spdev <dev> the device name for the spacenav (default: /dev/input/spacenavigator)\n");
     fprintf(stderr, "   -listenport <port> port to listen on for UDP synchronization traffic. Setting either this or listenaddr will disable mouse, keyboard, and spacenav input on this system. For predictable behavior, listenaddr or listenport should be the first option on the command line, if either is used.\n");
     fprintf(stderr, "   -listenaddr <addr> address to listen on for UDP synchronization traffic to. Will default to 0.0.0.0 if unspecified, and -listenport is used.\n");
@@ -1213,17 +1215,12 @@ void translate(float stepX, float stepY)
 {
     dx = dx - (-z * cos(a) * stepX - z * sin(a) * stepY);
     dy = dy - (-z * sin(a) * stepX + z * cos(a) * stepY);
-    
-    //fprintf(stderr, "%f, %d, %d, %f, %d, %d, %f\n", dx, imgCurrent->w, w, dy, imgCurrent->h, h, z);
-    //fprintf(stderr, "dx: %f, z: %f, dx/z: %f, imgCurrent->w: %d, window width: %d\n",
-    //    dx, z, dx / z, imgCurrent->w, w);
 
-    // Constrain movement so the image stays at least somewhat on the screen
-    if (imgCurrent != 0) {
-        if (dy > imgCurrent->h - 10)
-            dy = imgCurrent->h - 10;
-        if (dy / z < -h + 10)
-            dy = z * (-h + 10);
+    // Constrain dy so that no white bars show up above or below the image
+    if (imgCurrent) {
+        if (dy < 0) dy = 0;
+        else if (dy > imgCurrent->h - h * z) dy = imgCurrent->h - h*z;
+    
         if (dx > imgCurrent->w - 10 && !h360)
             dx = imgCurrent->w - 10;
         if (dx / z < -w + 10 && !h360)
@@ -1274,7 +1271,7 @@ void *spacenav_handler(void *)
     while (1) {
         if (get_spacenav_event(&spev)) {
             if (spev.type == SPNAV_MOTION) {
-                translate(-1 * spev.x / spsens, spev.y / spsens);
+                translate(swapaxes * -1 * spev.x / spsens, swapaxes * spev.y / spsens);
                 float zf = z - z * spev.z / 350.0 / spsens;
 
                 zoom(zf);
@@ -1507,6 +1504,8 @@ int main(int argc, char **argv)
             }
         } else if (0 == strcmp(argv[i], "-h360")) {
             h360 = true;
+        } else if (0 == strcmp(argv[i], "-swapaxes")) {
+            swapaxes = -1;
         } else if (0 == strcmp(argv[i], "-spsens")) {
             if ((i + 1) < argc)
                 sscanf(argv[++i], "%f", &spsens);
