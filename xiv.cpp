@@ -1563,17 +1563,19 @@ int main(int argc, char **argv)
                 exit(1);
             }
         } else if (0 == strcmp(argv[i], "-listenaddr")) {
-            if ((i + 1) < argc)
+            if ((i + 1) < argc) {
                 listenaddr = argv[++i];
                 slavemode = true;
+            }
             else {
                 usage(argv[0]);
                 exit(1);
             }
         } else if (0 == strcmp(argv[i], "-listenport")) {
-            if ((i + 1) < argc)
+            if ((i + 1) < argc) {
                 sscanf(argv[++i], "%d", &listenport);
                 slavemode = true;
+            }
             else {
                 usage(argv[0]);
                 exit(1);
