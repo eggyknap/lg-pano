@@ -212,15 +212,11 @@ void usage(const char *prog)
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
     fprintf(stderr, "   -spdev <dev> the device name for the spacenav (default: /dev/input/spacenavigator)\n");
-
-// XXX validate these
-    fprintf(stderr, "   -listenaddr <addr> address to listen on for UDP synchronization traffic to. Only useful if -slavemode is on\n");
-    fprintf(stderr, "   -listenport <port> port to listen on for UDP synchronization traffic to. Only useful if -slavemode is on\n");
-
-    fprintf(stderr, "   -slavemode act as a slave, waiting for synchronization traffic on listenhost:listenport. For predictable behavior, this should be the first command line option, when it is used at all\n");
-    fprintf(stderr, "   -slavehost <host>:<port> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. Can be repeated to send traffic to multiple addresses, up to a maximum of %d slaves. Useful only when -slavemode is not on\n", MAX_SLAVES);
+    fprintf(stderr, "   -listenport <port> port to listen on for UDP synchronization traffic. Setting either this or listenaddr will disable mouse, keyboard, and spacenav input on this system. For predictable behavior, listenaddr or listenport should be the first option on the command line, if either is used.\n");
+    fprintf(stderr, "   -listenaddr <addr> address to listen on for UDP synchronization traffic to. Will default to 0.0.0.0 if unspecified, and -listenport is used.\n");
+    fprintf(stderr, "   -slavehost <host>:<port> address to send UDP synchronization traffic to, or to listen on. Can be a multicast group. Can be repeated to send traffic to multiple addresses, up to a maximum of %d slaves. Useful only when -listenaddr and -listenport are not used\n", MAX_SLAVES);
     fprintf(stderr, "   -broadcast include this option if the last -slavehost option on the command line thus far is a broadcast address, or as a slave, if the -listenaddr is a broadcast address\n");
-    fprintf(stderr, "   -multicast if the last -slavehost option on the command line thus far is a multicast group, or in -slavemode if the -listenaddr is a multicast addres, include this option. Only useful on slave instances. Along with -broadcast, this can be specified multiple times, once per -slavehost\n");
+    fprintf(stderr, "   -multicast if the last -slavehost option on the command line thus far is a multicast group, or in slave mode if the -listenaddr is a multicast address, include this option. Only useful on slave instances. Along with -broadcast, this can be specified multiple times, once per -slavehost\n");
     fprintf(stderr, "   -winname <NAME> Set the window name to NAME\n");
     fprintf(stderr, "   -winclass <NAME> Set the window class to NAME\n");
     fprintf(stderr, "   -v verbose.\n");
@@ -1509,7 +1505,7 @@ int main(int argc, char **argv)
         } else if (0 == strcmp(argv[i], "-spacenav")) {
             spacenav = true;
             if (slavemode) {
-                fprintf(stderr, "Cannot include -spacenav and -slavemode on the same command.");
+                fprintf(stderr, "Cannot include -spacenav and -listenaddr / -listenport on the same command.");
                 exit(0);
             }
         } else if (0 == strcmp(argv[i], "-spdev")) {
@@ -1519,8 +1515,6 @@ int main(int argc, char **argv)
                 usage(argv[0]);
                 exit(1);
             }
-        } else if (0 == strcmp(argv[i], "-slavemode")) {
-            slavemode = true;
         } else if (0 == strcmp(argv[i], "-multicast")) {
             if (slavemode) {
                 multicast = true;
@@ -1529,7 +1523,7 @@ int main(int argc, char **argv)
                 slavehosts[num_slaves-1].multicast = true;
             }
             else {
-                fprintf(stderr, "Please use -multicast only after the -slavemode or -slavehost options\n");
+                fprintf(stderr, "Please use -multicast only after the -listenaddr, -listenport, or -slavehost options\n");
                 usage(argv[0]);
                 exit(1);
             }
@@ -1541,7 +1535,7 @@ int main(int argc, char **argv)
                 slavehosts[num_slaves-1].broadcast = true;
             }
             else {
-                fprintf(stderr, "Please use -broadcast only after the -slavemode or -slavehost options\n");
+                fprintf(stderr, "Please use -broadcast only after the -listenaddr, -listenport, or -slavehost options\n");
                 usage(argv[0]);
                 exit(1);
             }
@@ -1571,6 +1565,7 @@ int main(int argc, char **argv)
         } else if (0 == strcmp(argv[i], "-listenaddr")) {
             if ((i + 1) < argc)
                 listenaddr = argv[++i];
+                slavemode = true;
             else {
                 usage(argv[0]);
                 exit(1);
@@ -1578,6 +1573,7 @@ int main(int argc, char **argv)
         } else if (0 == strcmp(argv[i], "-listenport")) {
             if ((i + 1) < argc)
                 sscanf(argv[++i], "%d", &listenport);
+                slavemode = true;
             else {
                 usage(argv[0]);
                 exit(1);
@@ -1604,7 +1600,7 @@ int main(int argc, char **argv)
             if ((i + 1) < argc)
                 fifo = argv[++i];
             if (slavemode) {
-                fprintf(stderr, "Cannot include -fifo and -slavemode on the same command.");
+                fprintf(stderr, "Cannot include -fifo and -listenaddr / -listenport on the same command.");
                 exit(0);
             }
         } else {
