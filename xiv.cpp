@@ -1238,9 +1238,15 @@ void zoom(float zf)
 {
     float xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
     float yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 + dy;
+
+    // Constrain zoom amount
+    if (zf < 0) zf = 0;
+    if (zf > 10) zf = 10;
+
     z = zf;
     dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2);
     dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
+    fprintf(stderr, "%f\n", z);
 
     send_coords();
 }
@@ -1273,11 +1279,7 @@ void *spacenav_handler(void *)
                 translate(-1 * spev.x / SPNAV_SENSITIVITY, spev.y / SPNAV_SENSITIVITY);
                 float zf = z - z * spev.z / 350.0 / SPNAV_SENSITIVITY;
 
-                // Constrain zoom amount
-                if ((zf < 0 || zf > 10) && z > 0 && z < 10) {
-                    zf = z;
-                } else
-                    zoom(zf);
+                zoom(zf);
             } else {
                 if (spev.type == SPNAV_BUTTON) {
                     next_image(1);
@@ -1932,10 +1934,13 @@ int main(int argc, char **argv)
                     a -= 5 * M_PI / 180;
             } else    // No Alt -> Zoom
             {
+                float zf;
+
                 if (m & ShiftMask)
-                    z /= 1.05;
+                    zf = z / 1.05;
                 else
-                    z /= 1.5;
+                    zf = z / 1.5;
+                zoom(zf);
             }
 
             dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
@@ -1962,10 +1967,13 @@ int main(int argc, char **argv)
                 else
                     a += 5 * M_PI / 180;
             } else {
+                float zf;
+
                 if (m & ShiftMask)
-                    z *= 1.05;
+                    zf = z * 1.05;
                 else
-                    z *= 1.5;
+                    zf = z * 1.5;
+                zoom(zf);
             }
 
             dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
