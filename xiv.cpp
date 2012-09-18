@@ -157,7 +157,6 @@ int num_allocd_slaves = 0;
 char *listenaddr = NULL;
 int listenport = 0;
 bool slavemode = false;
-bool broadcast = false;
 bool multicast = false;
 
 // values of powf(x,powe) for x between 0 and 1 to speed up calculation.
