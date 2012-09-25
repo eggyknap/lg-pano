@@ -1270,17 +1270,23 @@ void *spacenav_handler(void *)
 
     while (1) {
         if (get_spacenav_event(&spev)) {
-            if (spev.type == SPNAV_MOTION) {
-                translate(swapaxes * -1 * spev.x / spsens, swapaxes * spev.y / spsens);
-                float zf = z - z * spev.z / 350.0 / spsens;
+            {
+                // Mutex protection here means translation and zoom amounts
+                // don't change while the async_fill thread is drawing,
+                // preventing ugliness.
+                MutexProtect mp(&mutexData);
+                if (spev.type == SPNAV_MOTION) {
+                    translate(swapaxes * -1 * spev.x / spsens, swapaxes * spev.y / spsens);
+                    float zf = z - z * spev.z / 350.0 / spsens;
 
-                zoom(zf);
-            } else {
-                // value == 0  means the button is coming up. Without this, it
-                // would cycle images both on press *and* on release, which
-                // gets irritating.
-                if (spev.type == SPNAV_BUTTON && spev.value == 0) {
-                    next_image(1);
+                    zoom(zf);
+                } else {
+                    // value == 0  means the button is coming up. Without this, it
+                    // would cycle images both on press *and* on release, which
+                    // gets irritating.
+                    if (spev.type == SPNAV_BUTTON && spev.value == 0) {
+                        next_image(1);
+                    }
                 }
             }
         } else {
@@ -2344,8 +2350,8 @@ int main(int argc, char **argv)
 
     // Cleanup before leaving
     {
-        MutexProtect mwin(&mutexWin);
         MutexProtect mp(&mutexData);
+        MutexProtect mwin(&mutexWin);
         if (image != NULL)
             XDestroyImage(image);
         XDestroyWindow(display, window);

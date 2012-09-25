@@ -58,7 +58,7 @@ public:
 class MutexProtect
 {
  public:
- MutexProtect(pthread_mutex_t* m):_m(m) {
+ MutexProtect(pthread_mutex_t* m, char msg, char *src): _m(m) {
     pthread_mutex_lock(_m);
   }
   ~MutexProtect() {
