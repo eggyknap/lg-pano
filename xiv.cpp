@@ -1290,18 +1290,19 @@ void *watchdog_handler(void *)
         usleep(300000);
         if (last_counter == watchdog_counter) { 
             fprintf(stderr, "Watchdog says we need to kill the fill process!\n");
-            pthread_cancel(th);
-            pthread_join(th, &cancel_res);
-            if (cancel_res != PTHREAD_CANCELED) {
-                fprintf(stderr, "Failed to stop fill thread\n");
-                exit(1);
-            }
-            fprintf(stderr, "Stopped fill thread\n");
-            if (pthread_create(&th, NULL, async_fill, 0)) {
-                perror("Couldn't create new fill thread");
-                exit(1);
-            }
-            fprintf(stderr, "Started new fill thread\n");
+            exit(-4);
+//            pthread_cancel(th);
+//            pthread_join(th, &cancel_res);
+//            if (cancel_res != PTHREAD_CANCELED) {
+//                fprintf(stderr, "Failed to stop fill thread\n");
+//                exit(1);
+//            }
+//            fprintf(stderr, "Stopped fill thread\n");
+//            if (pthread_create(&th, NULL, async_fill, 0)) {
+//                perror("Couldn't create new fill thread");
+//                exit(1);
+//            }
+//            fprintf(stderr, "Started new fill thread\n");
         }
         else {
             last_counter = watchdog_counter;
