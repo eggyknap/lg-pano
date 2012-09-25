@@ -79,6 +79,8 @@ pthread_t thFifo;         // Pipe control thread
 pthread_t thSpacenav;     // Spacenav control thread
 pthread_t thUDPSlave;     // UDP slave control thread
 pthread_t thPreload;      // Preload image thread
+pthread_t thWatchdog;     // Watchdog to restart thFill if needed
+pthread_mutex_t watchdog_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Drawing 
 pthread_mutex_t mutexData = PTHREAD_MUTEX_INITIALIZER;    // Mutex protecting the data array
@@ -144,6 +146,8 @@ float spsens = 3.0;
 int swapaxes = 1;
 char *spdev = NULL;
 int xoffset = 0, yoffset = 0;
+bool watchdog = false;
+int watchdog_counter = 0;
 
 // X attributes
 char *win_name = NULL;
@@ -206,6 +210,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
     fprintf(stderr, "   -xthreads tell X11 we're using threads. This may cause, or possibly cure, hanging problems\n");
+    fprintf(stderr, "   -watchdog include watchdog thread to restart fill thread if it hangs\n");
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
     fprintf(stderr, "   -spsens ## Change spacenav sensitivity. Higher numbers mean less sensitivity. Default is 3.\n");
@@ -673,7 +678,14 @@ void *async_fill(void *)
     int zx1a = 0, zx2a = 0, zy1a = 0, zy2a = 0;
     int delay = 20000;
 
+    watchdog_counter = 1;
+
     while (run) {
+        if (watchdog) {
+            watchdog_counter++;
+            if (watchdog_counter >= 60000)
+                watchdog_counter = 1;
+        }
         // If something changed we need to redraw
         if (za != z || aa != a || dx != dxa || dy != dya ||
             la != lu || ca != cr || ra != revert || gma != gm
@@ -1260,6 +1272,29 @@ void next_image(int step)
     send_coords();
 }
 
+// Watchdog thread
+void *watchdog_handler(void *)
+{
+    int last_counter = 0;
+
+    // Wait for fill thread to start up
+    while (watchdog_counter == 0) {
+        usleep(100);
+    }
+
+    while (1) {
+        usleep(300000);
+        if (last_counter == watchdog_counter) { 
+            fprintf(stderr, "Watchdog says we need to kill the fill process!\n");
+        }
+        else {
+            last_counter = watchdog_counter;
+        }
+    }
+
+    return NULL;
+}
+
 // Thread for spacenav
 void *spacenav_handler(void *)
 {
@@ -1514,6 +1549,8 @@ int main(int argc, char **argv)
         } else if (0 == strcmp(argv[i], "-xthreads")) {
             XInitThreads();
             fprintf(stderr, "Threads initialized\n");
+        } else if (0 == strcmp(argv[i], "-watchdog")) {
+            watchdog = true;
         } else if (0 == strcmp(argv[i], "-swapaxes")) {
             swapaxes = -1;
         } else if (0 == strcmp(argv[i], "-spsens")) {
@@ -1860,6 +1897,10 @@ int main(int argc, char **argv)
 
     pthread_create(&th, NULL, async_fill, 0);
     pthread_create(&thPreload, NULL, async_load, 0);
+
+    if (watchdog) {
+        pthread_create(&thWatchdog, NULL, watchdog_handler, 0);
+    }
 
     bool leftdown = false;
 
