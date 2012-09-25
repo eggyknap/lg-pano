@@ -678,6 +678,9 @@ void *async_fill(void *)
     int zx1a = 0, zx2a = 0, zy1a = 0, zy2a = 0;
     int delay = 20000;
 
+    if (pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &watchdog_counter)) {
+        perror("ERROR setting cancellation type for async_fill thread");
+    }
     watchdog_counter = 1;
 
     while (run) {
@@ -1276,6 +1279,7 @@ void next_image(int step)
 void *watchdog_handler(void *)
 {
     int last_counter = 0;
+    void *cancel_res;
 
     // Wait for fill thread to start up
     while (watchdog_counter == 0) {
@@ -1286,6 +1290,18 @@ void *watchdog_handler(void *)
         usleep(300000);
         if (last_counter == watchdog_counter) { 
             fprintf(stderr, "Watchdog says we need to kill the fill process!\n");
+            pthread_cancel(th);
+            pthread_join(th, &cancel_res);
+            if (cancel_res != PTHREAD_CANCELED) {
+                fprintf(stderr, "Failed to stop fill thread\n");
+                exit(1);
+            }
+            fprintf(stderr, "Stopped fill thread\n");
+            if (pthread_create(&th, NULL, async_fill, 0)) {
+                perror("Couldn't create new fill thread");
+                exit(1);
+            }
+            fprintf(stderr, "Started new fill thread\n");
         }
         else {
             last_counter = watchdog_counter;
