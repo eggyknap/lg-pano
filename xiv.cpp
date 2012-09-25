@@ -205,6 +205,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
+    fprintf(stderr, "   -xthreads tell X11 we're using threads. This may cause, or possibly cure, hanging problems\n");
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
     fprintf(stderr, "   -spsens ## Change spacenav sensitivity. Higher numbers mean less sensitivity. Default is 3.\n");
@@ -1510,6 +1511,9 @@ int main(int argc, char **argv)
             }
         } else if (0 == strcmp(argv[i], "-h360")) {
             h360 = true;
+        } else if (0 == strcmp(argv[i], "-xthreads")) {
+            XInitThreads();
+            fprintf(stderr, "Threads initialized\n");
         } else if (0 == strcmp(argv[i], "-swapaxes")) {
             swapaxes = -1;
         } else if (0 == strcmp(argv[i], "-spsens")) {
