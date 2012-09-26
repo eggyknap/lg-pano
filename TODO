@@ -1,9 +1,12 @@
 Liquid Galaxy version:
 ----------------------
-* Fix all the hanging that happens on slaves, or when using the spacenav
 * Make xiv complain when it gets command line options it doesn't understand.
   Right now it thinks they're image names. Perhaps it's best to complain when
   it gets an image name it can't find a file for.
+* Speed up -bilinear
+* Zooming in close happens in stages, rather than smoothly. Fix that.
+* Moving around on slaves is jerky. Fix this. Smoothing the input from the
+  spacenav might help.
 
 Original version:
 -----------------
