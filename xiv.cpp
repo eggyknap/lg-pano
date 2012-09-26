@@ -209,7 +209,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
-    fprintf(stderr, "   -xthreads tell X11 we're using threads. This may cause, or possibly cure, hanging problems\n");
+//    fprintf(stderr, "   -xthreads tell X11 we're using threads. This may cause, or possibly cure, hanging problems\n");
     fprintf(stderr, "   -watchdog include watchdog thread to restart fill thread if it hangs\n");
     fprintf(stderr, "   -h360 treat photos as 360 panoramas horizontally. Scrolling off either side causes the image to repeat\n");
     fprintf(stderr, "   -spacenav use space navigator at /dev/input/spacenavigator for direction\n");
@@ -1279,7 +1279,6 @@ void next_image(int step)
 void *watchdog_handler(void *)
 {
     int last_counter = 0;
-    void *cancel_res;
 
     // Wait for fill thread to start up
     while (watchdog_counter == 0) {
@@ -1290,19 +1289,8 @@ void *watchdog_handler(void *)
         usleep(300000);
         if (last_counter == watchdog_counter) { 
             fprintf(stderr, "Watchdog says we need to kill the fill process!\n");
+            // Randomly-selected nonzero number
             exit(-4);
-//            pthread_cancel(th);
-//            pthread_join(th, &cancel_res);
-//            if (cancel_res != PTHREAD_CANCELED) {
-//                fprintf(stderr, "Failed to stop fill thread\n");
-//                exit(1);
-//            }
-//            fprintf(stderr, "Stopped fill thread\n");
-//            if (pthread_create(&th, NULL, async_fill, 0)) {
-//                perror("Couldn't create new fill thread");
-//                exit(1);
-//            }
-//            fprintf(stderr, "Started new fill thread\n");
         }
         else {
             last_counter = watchdog_counter;
@@ -1500,6 +1488,7 @@ int main(int argc, char **argv)
 
     bool browse = false;
 
+    XInitThreads();
     // Allocate file list
     files = (char **)malloc(sizeof(char *) * MAX_NBFILES);
     if (files == NULL) {
@@ -1563,9 +1552,9 @@ int main(int argc, char **argv)
             }
         } else if (0 == strcmp(argv[i], "-h360")) {
             h360 = true;
-        } else if (0 == strcmp(argv[i], "-xthreads")) {
-            XInitThreads();
-            fprintf(stderr, "Threads initialized\n");
+//        } else if (0 == strcmp(argv[i], "-xthreads")) {
+//            XInitThreads();
+//            fprintf(stderr, "Threads initialized\n");
         } else if (0 == strcmp(argv[i], "-watchdog")) {
             watchdog = true;
         } else if (0 == strcmp(argv[i], "-swapaxes")) {
@@ -1920,12 +1909,22 @@ int main(int argc, char **argv)
     }
 
     bool leftdown = false;
+    bool done = false;
 
     run = true;
 
     // Event Loop
     do {
-        XNextEvent(display, &event);
+        done = false;
+        while (!done) {
+            if (XPending(display)) {
+                XNextEvent(display, &event);
+                done = true;
+            }
+            else {
+                usleep(100);
+            }
+        }
 
         MutexProtect mp(&mutexData);
         if (event.type == Expose && event.xexpose.count < 1
