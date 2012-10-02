@@ -20,25 +20,28 @@
 #include <unistd.h>
 #include "read-event.h"
 
-int spacenav_fd;
+int spacenav_fd, smooth = 0;
 
-int init_spacenav(const char *dev_name)
+int init_spacenav(const char *dev_name, int s)
 {
 	if ((spacenav_fd = open(dev_name, O_RDONLY | O_NONBLOCK)) < 0) {
 		perror("Unable to open spacenav input device");
 		return 0;
 	}
+    smooth = s;
 	return 1;
 }
 
-int get_spacenav_event(spnav_event * p)
+int get_spacenav_event(spnav_event * p, int *flush)
 {
-	int x, y, z, yaw, pitch, roll;
-	x = y = z = yaw = pitch = roll = 0;
+	static int x = 0, y = 0, z = 0, yaw = 0, pitch = 0, roll = 0;
 	struct input_event ev;
 	struct input_event *event_data = &ev;
 
 	int num_read = read(spacenav_fd, event_data, sizeof(ev));
+
+    if (flush != NULL)
+        *flush = 0;
 
 	if (sizeof(ev) != num_read) {
 		return 0;
@@ -59,43 +62,61 @@ int get_spacenav_event(spnav_event * p)
 
 	} else if (event_data->type == EV_SYN) {
         // These events indicate the data from the spacenav has been flushed to
-        // the host computer. Ignore these for now.
-		return 0;
+        // the host computer.
+        if (flush != NULL)
+            *flush = 1;
+        if (smooth) {
+            p->type = SPNAV_MOTION;
+            p->x = x;
+            p->y = y;
+            p->z = z;
+            p->yaw = yaw;
+            p->pitch = pitch;
+            p->roll = roll;
+        }
+	    x = y = z = yaw = pitch = roll = 0;
+		return 1;
 
 	} else if (event_data->type == EV_REL || event_data->type == EV_ABS) {
 		int axis = event_data->code;
 		int amount = event_data->value;
 
 		switch (axis) {
-		case 0:
-			x = amount;
-			break;
-		case 1:
-			y = amount;
-			break;
-		case 2:
-			z = amount;
-			break;
-		case 3:
-			pitch = amount;
-			break;
-		case 4:
-			roll = amount;
-			break;
-		case 5:
-			yaw = amount;
-			break;
-		default:
-			fprintf(stderr, "unknown axis event\n");
-			break;
+            case 0:
+                x = amount;
+                break;
+            case 1:
+                y = amount;
+                break;
+            case 2:
+                z = amount;
+                break;
+            case 3:
+                pitch = amount;
+                break;
+            case 4:
+                roll = amount;
+                break;
+            case 5:
+                yaw = amount;
+                break;
+            default:
+                fprintf(stderr, "unknown axis event\n");
+                break;
 		}
-        p->type = SPNAV_MOTION;
-		p->x = x;
-		p->y = y;
-		p->z = z;
-		p->yaw = yaw;
-		p->pitch = pitch;
-		p->roll = roll;
+
+        if (smooth) {
+            return 0;
+        }
+        else {
+            p->type = SPNAV_MOTION;
+            p->x = x;
+            p->y = y;
+            p->z = z;
+            p->yaw = yaw;
+            p->pitch = pitch;
+            p->roll = roll;
+        }
 
 		return 1;
 

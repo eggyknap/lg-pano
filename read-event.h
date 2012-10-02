@@ -13,7 +13,7 @@ typedef struct {
     int x, y, z, yaw, pitch, roll;
 } spnav_event;
 
-int init_spacenav(const char *dev_name);
-int get_spacenav_event(spnav_event *);
+int init_spacenav(const char *, int);
+int get_spacenav_event(spnav_event *, int *);
 
 #endif
