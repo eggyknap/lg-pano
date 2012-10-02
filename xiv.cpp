@@ -1320,7 +1320,8 @@ bool spacenav_handler(void)
                 // would cycle images both on press *and* on release, which
                 // gets irritating.
                 if (spev.type == SPNAV_BUTTON && spev.value == 0) {
-                    next_image(1);
+                    // Left spnav button goes to previous image, right one goes to next image
+                    next_image(spev.button * 2 - 1);
                 }
             }
             changed = true;
@@ -1389,16 +1390,16 @@ void quit()
         pthread_cancel(thFifo);
         pthread_join(thFifo, &r);
     }
-    if (spacenav) {
-        pthread_cancel(thSpacenav);
-        pthread_join(thSpacenav, &r);
-    }
+    //if (spacenav) {
+    //    pthread_cancel(thSpacenav);
+    //    pthread_join(thSpacenav, &r);
+    //}
     if (slavemode) {
         pthread_cancel(thUDPSlave);
         pthread_join(thUDPSlave, &r);
     }
     pthread_join(thPreload, &r);
-    pthread_join(th, &r);
+    //pthread_join(th, &r);
 }
 
 // Destroy current window
