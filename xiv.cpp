@@ -148,6 +148,7 @@ char *spdev = NULL;
 int xoffset = 0, yoffset = 0;
 bool watchdog = false;
 int watchdog_counter = 0;
+bool udp_input = false;
 
 // X attributes
 char *win_name = NULL;
@@ -1142,6 +1143,7 @@ void *udp_handler(void *) {
     while (1) {
         if (read(recv_socket, &data, sizeof(sync_struct)) >= (ssize_t) sizeof(sync_struct) &&
             data.flag == 1234) {
+            udp_input = true;
             // Do something here with what we've received
             if (verbose) {
                 fprintf(stderr, "%d, %d, %f, %f, %f\n", data.img_idx, data.flag, data.dx, data.dy, data.z);
@@ -1304,17 +1306,22 @@ bool spacenav_handler(void)
     spnav_event spev;
     bool changed = false;
 
-    if (get_spacenav_event(&spev)) {
+    if (get_spacenav_event(&spev, NULL)) {
         {
             // Mutex protection here means translation and zoom amounts
             // don't change while the async_fill thread is drawing,
             // preventing ugliness.
             MutexProtect mp(&mutexData);
-            if (spev.type == SPNAV_MOTION) {
-                translate(swapaxes * -1 * spev.x / spsens, swapaxes * spev.y / spsens);
-                float zf = z - z * spev.z / 350.0 / spsens;
 
-                zoom(zf);
+            if (spev.type == SPNAV_MOTION) {
+                if (abs(spev.x) + abs(spev.y) + abs(spev.z) != 0) {
+                    translate(swapaxes * -1 * spev.x / spsens, swapaxes * spev.y / spsens);
+                    float zf = z - z * spev.z / 350.0 / spsens;
+                    zoom(zf);
+                    if (verbose)
+                        fprintf(stderr, "%d, %d, %d\n", spev.x, spev.y, spev.z);
+                    changed = true;
+                }
             } else {
                 // value == 0  means the button is coming up. Without this, it
                 // would cycle images both on press *and* on release, which
@@ -1323,11 +1330,9 @@ bool spacenav_handler(void)
                     // Left spnav button goes to previous image, right one goes to next image
                     next_image(spev.button * 2 - 1);
                 }
+                changed = true;
             }
-            changed = true;
         }
-//    } else {
-//        usleep(100);
     }
     return changed;
 }
@@ -1673,7 +1678,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (spacenav && !init_spacenav(spdev == NULL ? "/dev/input/spacenavigator" : spdev)) {
+    if (spacenav && !init_spacenav(spdev == NULL ? "/dev/input/spacenavigator" : spdev, 1)) {
         fprintf(stderr, "Couldn't initialize the spacenav");
         exit(0);
     }
@@ -2403,8 +2408,10 @@ int main(int argc, char **argv)
         }
         if (spacenav)
             changed = changed || spacenav_handler();
-        if (changed)
+        if (changed || udp_input) {
+            udp_input = false;
             async_fill();
+        }
         else
             usleep(200);
 
