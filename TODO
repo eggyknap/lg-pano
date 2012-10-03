@@ -5,8 +5,7 @@ Liquid Galaxy version:
   it gets an image name it can't find a file for.
 * Speed up -bilinear
 * Zooming in close happens in stages, rather than smoothly. Fix that.
-* Moving around on slaves is jerky. Fix this. Smoothing the input from the
-  spacenav might help.
+* Moving around on slaves is jerky. Fix this.
 
 Original version:
 -----------------
