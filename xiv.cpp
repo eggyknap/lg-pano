@@ -99,7 +99,7 @@ int lu = 0;              // Luminosity
 int cr = 255;            // Contrast
 float gm = 1;            // Gamma
 int osdSize = 256;
-int bggray = 255;       // Gray value of background. 0 is black, 255 is white
+int bggray = 0;          // Gray value of background. 0 is black, 255 is white
 
 // Current image
 Image *imgCurrent = 0;
@@ -208,7 +208,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -browse expand the list of files by browsing the directory of the first file.\n");
     fprintf(stderr, "   -shuffle file list.\n");
     fprintf(stderr, "   -bilinear Turn on bilinear interpolation.\n");
-    fprintf(stderr, "   -bggray Gray value for background. 0 is black, 255 is white. Values outside that range are rejected.\n");
+    fprintf(stderr, "   -bggray Gray value for background. 0 is black, 255 is white. Values outside that range are rejected. Default is 0.\n");
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
