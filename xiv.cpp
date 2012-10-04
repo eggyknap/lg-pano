@@ -99,6 +99,7 @@ int lu = 0;              // Luminosity
 int cr = 255;            // Contrast
 float gm = 1;            // Gamma
 int osdSize = 256;
+int bggray = 255;       // Gray value of background. 0 is black, 255 is white
 
 // Current image
 Image *imgCurrent = 0;
@@ -207,6 +208,7 @@ void usage(const char *prog)
     fprintf(stderr, "   -browse expand the list of files by browsing the directory of the first file.\n");
     fprintf(stderr, "   -shuffle file list.\n");
     fprintf(stderr, "   -bilinear Turn on bilinear interpolation.\n");
+    fprintf(stderr, "   -bggray Gray value for background. 0 is black, 255 is white. Values outside that range are rejected.\n");
     fprintf(stderr, "   -fifo filename for incoming commands, default is no command file.\n");
     fprintf(stderr, "   -xoffset/yoffset ##  The number of pixels to offset the image in the X/Y direction\n");
     fprintf(stderr, "   -nodoublebuf don't use Xdbe double buffering, even if it's available\n");
@@ -560,8 +562,8 @@ inline void pixel(int ii, int ji, int &r, int &g, int &b)
                 pixel_gm_nb2(ii, ji2, r, g, b);
         }
     } else {
-        // Outside of the image, the world is white...
-        r = g = b = 255;
+        // Outside of the image, the world is some constant gray something...
+        r = g = b = bggray;
     }
 
 }
@@ -1641,6 +1643,19 @@ int main(int argc, char **argv)
             }
         } else if (0 == strcmp(argv[i], "-bilinear")) {
             bilin = true;
+        } else if (0 == strcmp(argv[i], "-bggray")) {
+            if ((i + 1) < argc) {
+                sscanf(argv[++i], "%d", &bggray);
+                if (bggray > 255 || bggray < 0) {
+                    fprintf(stderr, "bggray needs to be between 0 and 255, inclusive\n");
+                    usage(argv[0]);
+                    exit(1);
+                }
+            }
+            else {
+                usage(argv[0]);
+                exit(1);
+            }
         } else if (0 == strcmp(argv[i], "-v")) {
             verbose = true;
         } else if (0 == strcmp(argv[i], "-threads")) {
