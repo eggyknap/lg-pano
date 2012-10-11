@@ -1553,6 +1553,8 @@ int main(int argc, char **argv)
                 usage(argv[0]);
                 exit(1);
             }
+        } else if (0 == strcmp(argv[i], "-nodoublebuf")) {
+             do_double_buff = false;
         } else if (0 == strcmp(argv[i], "-h360")) {
             h360 = true;
 //        } else if (0 == strcmp(argv[i], "-xthreads")) {
