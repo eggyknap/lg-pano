@@ -1229,10 +1229,18 @@ void send_coords(void) {
     }
 }
 
-void translate(float stepX, float stepY)
+void translate_and_zoom(float stepX, float stepY, float zf)
 {
-    dx = dx - (-z * cos(a) * stepX - z * sin(a) * stepY);
-    dy = dy - (-z * sin(a) * stepX + z * cos(a) * stepY);
+    float xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
+    float yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 + dy;
+
+    // Constrain zoom amount
+    if (zf < 0) zf = 0;
+    if (zf > maxz) zf = maxz;
+
+    z = zf;
+    dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2) - (-z * cos(a) * stepX - z * sin(a) * stepY);
+    dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2) - (-z * sin(a) * stepX + z * cos(a) * stepY);
 
     // Constrain dy so that no white bars show up above or below the image
     if (imgCurrent) {
@@ -1246,22 +1254,6 @@ void translate(float stepX, float stepY)
 
         send_coords();
     }
-}
-
-void zoom(float zf)
-{
-    float xp = z * cos(a) * w / 2 - z * sin(a) * h / 2 + dx;
-    float yp = z * sin(a) * h / 2 + z * cos(a) * h / 2 + dy;
-
-    // Constrain zoom amount
-    if (zf < 0) zf = 0;
-    if (zf > maxz) zf = maxz;
-
-    z = zf;
-    dx = xp - (z * cos(a) * w / 2 - z * sin(a) * h / 2);
-    dy = yp - (z * sin(a) * w / 2 + z * cos(a) * h / 2);
-
-    send_coords();
 }
 
 // Display next image
@@ -1317,9 +1309,8 @@ bool spacenav_handler(void)
 
             if (spev.type == SPNAV_MOTION) {
                 if (abs(spev.x) + abs(spev.y) + abs(spev.z) != 0) {
-                    translate(swapaxes * -1 * spev.x / spsens, swapaxes * spev.y / spsens);
                     float zf = z - z * spev.z / 350.0 / spsens;
-                    zoom(zf);
+                    translate_and_zoom(swapaxes * -1 * spev.x / spsens, swapaxes * spev.y / spsens, zf);
                     if (verbose)
                         fprintf(stderr, "%d, %d, %d\n", spev.x, spev.y, spev.z);
                     changed = true;
@@ -1362,7 +1353,7 @@ void *async_fifo(void *)
                     if (zc <= 0) {
                         full_extend();
                     } else {
-                        zoom(zc);
+                        translate_and_zoom(0, 0, zc);
                     }
                 } else if (strstr(msg, "c") == msg) {
                     int xp, yp;
@@ -1374,7 +1365,7 @@ void *async_fifo(void *)
                 } else if (strstr(msg, "m") == msg) {
                     int dxp, dyp;
                     sscanf(msg, "m %d %d\n", &dxp, &dyp);
-                    translate(dxp, dyp);
+                    translate_and_zoom(dxp, dyp, 0);
                 } else if (strstr(msg, "q") == msg) {
                     close(fd);
                     unlink(fifo);
@@ -2026,7 +2017,7 @@ int main(int argc, char **argv)
                         zf = z / 1.05;
                     else
                         zf = z / 1.5;
-                    zoom(zf);
+                    translate_and_zoom(0, 0, zf);
                 }
 
                 dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
@@ -2059,7 +2050,7 @@ int main(int argc, char **argv)
                         zf = z * 1.05;
                     else
                         zf = z * 1.5;
-                    zoom(zf);
+                    translate_and_zoom(0, 0, zf);
                 }
 
                 dx = xp - (z * cos(a) * wx - z * sin(a) * wy);
@@ -2208,10 +2199,10 @@ int main(int argc, char **argv)
                     }
                     if (0 == strcmp(c, "+") || 0 == strcmp(c, "z"))    // Zoom keep center view
                     {
-                        zoom(z / 1.5);
+                        translate_and_zoom(0, 0, z / 1.5);
                     } else if (0 == strcmp(c, "-") || 0 == strcmp(c, "Z"))    // Unzoom keep center view
                     {
-                        zoom(z * 1.5);
+                        translate_and_zoom(0, 0, z * 1.5);
                     } else if (0 == strcmp(c, "/") || 0 == strcmp(c, "*"))    // Rotate PI/2
                     {
                         float fa = 0;
@@ -2340,9 +2331,9 @@ int main(int argc, char **argv)
                                 rotate(a + 5 * M_PI / 180);
                         } else {
                             if (m & ShiftMask)
-                                translate(-w / 20, 0);
+                                translate_and_zoom(-w / 20, 0, 0);
                             else
-                                translate(-w / 5, 0);
+                                translate_and_zoom(-w / 5, 0, 0);
                         }
                     } else if (ks == XK_Right)    // Key based Pan / Rotate
                     {
@@ -2353,22 +2344,22 @@ int main(int argc, char **argv)
                                 rotate(a - 5 * M_PI / 180);
                         } else {
                             if (m & ShiftMask)
-                                translate(w / 20, 0);
+                                translate_and_zoom(w / 20, 0, 0);
                             else
-                                translate(w / 5, 0);
+                                translate_and_zoom(w / 5, 0, 0);
                         }
                     } else if (ks == XK_Up)    // Key based Pan Up
                     {
                         if (m & ShiftMask)
-                            translate(0, h / 20);
+                            translate_and_zoom(0, h / 20, 0);
                         else
-                            translate(0, h / 5);
+                            translate_and_zoom(0, h / 5, 0);
                     } else if (ks == XK_Down)    // Key based Pan Down
                     {
                         if (m & ShiftMask)
-                            translate(0, -h / 20);
+                            translate_and_zoom(0, -h / 20, 0);
                         else
-                            translate(0, -h / 5);
+                            translate_and_zoom(0, -h / 5, 0);
                     } else if (ks == XK_F1 || ks == XK_F2 || ks == XK_F3
                         || ks == XK_F4 || ks == XK_F5 || ks == XK_F6
                         || ks == XK_F7 || ks == XK_F8 || ks == XK_F9
