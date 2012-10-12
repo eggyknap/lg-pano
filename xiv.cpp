@@ -1158,10 +1158,13 @@ void *udp_handler(void *) {
                 }
                 display_image(files[data.img_idx]);
             }
-            dx = data.dx;
-            dy = data.dy;
-            z = data.z;
-            idxfile = data.img_idx;
+            {
+                MutexProtect mp(&mutexData);
+                dx = data.dx;
+                dy = data.dy;
+                z = data.z;
+                idxfile = data.img_idx;
+            }
         }
     }
     return 0;
