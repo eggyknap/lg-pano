@@ -1143,27 +1143,31 @@ void *udp_handler(void *) {
     }
 
     while (1) {
-        if (read(recv_socket, &data, sizeof(sync_struct)) >= (ssize_t) sizeof(sync_struct) &&
-            data.flag == 1234) {
-            udp_input = true;
-            // Do something here with what we've received
-            if (verbose) {
-                fprintf(stderr, "%d, %d, %f, %f, %f\n", data.img_idx, data.flag, data.dx, data.dy, data.z);
-            }
-
-            if (idxfile != data.img_idx) {
-                if (data.img_idx >= nbfiles || data.img_idx < 0) {
-                    fprintf(stderr, "ERROR: Tried to cycle past the end of the image list (idxfile = %d, nbfiles = %d). Is the list of images on your command line identical to the master, and do all the images actually exist?\n", data.img_idx, nbfiles);
-                    exit(1);
+        if (read(recv_socket, &data, sizeof(sync_struct)) >= (ssize_t) sizeof(sync_struct)) {
+            if ( data.flag == 1234) {
+                udp_input = true;
+                // Do something here with what we've received
+                if (verbose) {
+                    fprintf(stderr, "%d, %d, %f, %f, %f\n", data.img_idx, data.flag, data.dx, data.dy, data.z);
                 }
-                display_image(files[data.img_idx]);
+
+                if (idxfile != data.img_idx) {
+                    if (data.img_idx >= nbfiles || data.img_idx < 0) {
+                        fprintf(stderr, "ERROR: Tried to cycle past the end of the image list (idxfile = %d, nbfiles = %d). Is the list of images on your command line identical to the master, and do all the images actually exist?\n", data.img_idx, nbfiles);
+                        exit(1);
+                    }
+                    display_image(files[data.img_idx]);
+                }
+                {
+                    MutexProtect mp(&mutexData);
+                    dx = data.dx;
+                    dy = data.dy;
+                    z = data.z;
+                    idxfile = data.img_idx;
+                }
             }
-            {
-                MutexProtect mp(&mutexData);
-                dx = data.dx;
-                dy = data.dy;
-                z = data.z;
-                idxfile = data.img_idx;
+            else {
+                fprintf(stderr, "Wrong flag value\n");
             }
         }
     }
