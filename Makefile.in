@@ -4,16 +4,22 @@ CXXFLAGS = -Wall @CXXFLAGS@
 LDFLAGS = @LDFLAGS@
 PREFIX = @prefix@
 
-all: xiv
+all: xiv gltest
 
 .cpp.o:
 	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
+
+gltest.o: gltest.c
+	gcc -g -O2 -Wall -I/usr/include/GL -I/usr/include/GraphicsMagick -c gltest.c
 
 .c.o:
 	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
 
 xiv: xiv.o xiv_utils.o xiv_readers.o read-event.o
 	$(CXX) xiv.o xiv_utils.o xiv_readers.o read-event.o -o xiv $(LDFLAGS) @LIBS@
+
+gltest: gltest.o
+	gcc gltest.o -lGraphicsMagickWand -lglut -o gltest
 
 clean:
 	rm -f xiv *~ core.* *.o
