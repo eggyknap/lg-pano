@@ -19,7 +19,7 @@ xiv: xiv.o xiv_utils.o xiv_readers.o read-event.o
 	$(CXX) xiv.o xiv_utils.o xiv_readers.o read-event.o -o xiv $(LDFLAGS) @LIBS@
 
 gltest: gltest.o
-	gcc gltest.o -lGraphicsMagickWand -lglut -o gltest
+	gcc gltest.o -lGL -lGraphicsMagickWand -lglut -o gltest
 
 clean:
 	rm -f xiv *~ core.* *.o
