@@ -2,6 +2,7 @@
  *      -- Support xoffset
  *      -- Constrain movement
  *      -- Add graphicsmagick and freeglut libraries to autoconf stuff
+ *      -- Handle directories of images gracefully
  */
 
 #include <freeglut.h>
