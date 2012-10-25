@@ -1,6 +1,7 @@
 /* TODO:
  *      -- Support xoffset
  *      -- Constrain movement
+ *      -- Add graphicsmagick and freeglut libraries to autoconf stuff
  */
 
 #include <freeglut.h>
