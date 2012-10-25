@@ -1,3 +1,8 @@
+/* TODO:
+ *      -- Support xoffset
+ *      -- Constrain movement
+ */
+
 #include <freeglut.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,7 +66,7 @@ struct {
     "",     /* listenaddr */
     0,      /* valid listenaddr */
     -1,     /* listenport */
-    0       /* multicast */ /* XXX add this to getoptions */
+    0       /* multicast */
 };
 
 void setup_texture(void);
@@ -294,7 +299,6 @@ void get_options(const int argc, char * const argv[]) {
 
 void translate(float h, float v, float z) {
     /* Calculate texture coordinates */
-    /* XXX One bad constraint shouldn't invalidate all other translations in one call */
     /* XXX If zooming out would be blocked because of constraints, can I
      * translate some and still zoom? */
 
