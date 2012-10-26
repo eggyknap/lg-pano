@@ -10,7 +10,7 @@ all: xiv gltest
 	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
 
 gltest.o: gltest.c
-	gcc -g -O2 -Wall -I/usr/include/GL -I/usr/include/GraphicsMagick -c gltest.c
+	gcc -g -O2 -Wall -I/usr/include/GL -c gltest.c
 
 .c.o:
 	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
@@ -23,7 +23,7 @@ read-event-c.o: read-event.c
 	gcc -g -O2 -Wall -c read-event.c -o read-event-c.o
 
 gltest: gltest.o read-event-c.o
-	gcc gltest.o read-event-c.o -lGL -lGraphicsMagickWand -lglut -o gltest
+	gcc gltest.o read-event-c.o -lGL -ljpeg -lglut -o gltest
 
 clean:
 	rm -f xiv *~ core.* *.o
