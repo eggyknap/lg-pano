@@ -1,7 +1,7 @@
 /* TODO:
  *      -- Support xoffset
  *      -- Constrain movement
- *      -- Add graphicsmagick and freeglut libraries to autoconf stuff
+ *      -- Add freeglut and any other necessary libraries to autoconf stuff
  *      -- Handle directories of images gracefully
  */
 
@@ -20,7 +20,6 @@
 #include <sys/queue.h>
 #include <jpeglib.h>
 #include <setjmp.h>
-/* #include "wand/magick_wand.h" */
 #include "read-event.h"
 #define ADDR_LEN 500
 
@@ -539,7 +538,7 @@ unsigned char *read_JPEG_file (char * filename, unsigned int *width, unsigned in
          */
         (void) jpeg_read_scanlines(&cinfo, buffer, 1);
         /* Assume put_scanline_someplace wants a pointer and sample count. */
-        memcpy(pixels + row_stride * cinfo.output_scanline, buffer[0], row_stride);
+        memcpy(pixels + row_stride * (cinfo.output_scanline - 1), buffer[0], row_stride);
     }
 
     /* Step 7: Finish decompression */
@@ -577,6 +576,9 @@ void setup_texture(void) {
 
     texture_width = MagickGetImageWidth(wand);
     texture_height = MagickGetImageHeight(wand); */
+    if (tex_buffer != NULL)
+        free(tex_buffer);
+
     tex_buffer = read_JPEG_file(images[image_index], &texture_width, &texture_height);
     texture_aspect = 1.0 * texture_width / texture_height;
 
