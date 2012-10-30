@@ -23,7 +23,7 @@ read-event-c.o: read-event.c
 	gcc -g -O2 -Wall -c read-event.c -o read-event-c.o
 
 gltest: gltest.o read-event-c.o
-	gcc gltest.o read-event-c.o -lGL -ljpeg -lglut -o gltest
+	gcc gltest.o read-event-c.o -lGL -ljpeg -lSDL -o gltest
 
 clean:
 	rm -f xiv *~ core.* *.o

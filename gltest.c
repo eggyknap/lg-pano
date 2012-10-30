@@ -5,7 +5,9 @@
  *      -- Handle directories of images gracefully
  */
 
-#include <freeglut.h>
+/* #include <freeglut.h> */
+#include <GL/gl.h>
+#include <SDL/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,13 +36,14 @@ int quit_main_loop = 0;     /* Flag to exit the program */
 int image_index = 0,        /* Which image are we supposed to be looking at now? */
     num_images = 0;
 char **images;              /* Array of image names, initialized from argv */
-float screen_width, screen_height;
+int screen_width, screen_height;
 float texture_aspect;
 unsigned int texture_width, texture_height;
 float tex_min_x, tex_min_y, tex_max_x, tex_max_y;   /* Texture coordinates */
 int *send_sockets;
 int num_sockets = 0;
 int has_slaves = 0;
+int redraw = 1;
 
 struct slavehost_s {
     char addr[ADDR_LEN];
@@ -137,7 +140,7 @@ void udp_handler(int recv_socket) {
             tex_max_x = data.tex_max_x;
             tex_max_y = data.tex_max_y;
 
-            glutPostRedisplay();
+            redraw = 1;
         }
         else {
             fprintf(stderr, "Wrong flag value\n");
@@ -364,7 +367,7 @@ void translate(float h, float v, float z) {
         fprintf(stderr, "Texture coords: (%f, %f) -> (%f, %f)\n",
             tex_min_x, tex_min_y, tex_max_x, tex_max_y);
         fprintf(stderr, "Screen: (%d, %d)\timage: (%d, %d)\n",
-            (int) screen_width, (int) screen_height,
+             screen_width, screen_height,
              texture_width, texture_height);
         fprintf(stderr, "Disp/zoom: (%f, %f, %f)\n\n", horiz_disp, vert_disp, zoom_factor);
     }
@@ -386,11 +389,12 @@ void translate(float h, float v, float z) {
     }
 
     /* Make sure we redraw */
-    glutPostRedisplay();
+    redraw = 1;
 }
 
-/* GLUT's callback to render the image */
+/* render the image */
 static void render_scene(void) {
+    redraw = 0;
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
     glEnable(GL_TEXTURE_2D);
@@ -408,7 +412,7 @@ static void render_scene(void) {
     glEnd();
     glDisable(GL_TEXTURE_2D);
 
-    glutSwapBuffers();
+    SDL_GL_SwapBuffers();
 }
 
 /* This struct, my_error_exit, and read_JPEG_file were lifted wholesale from
@@ -617,32 +621,34 @@ void next_image(void) {
         image_index = 0;
 }
 
-void handle_keyboard(unsigned char key, int x, int y) {
-    switch(key) {
-        case 'q':
+void handle_keyboard(SDL_keysym* keysym ) {
+    switch(keysym->sym) {
+        case SDLK_q:
             quit_main_loop = 1;
             break;
-        case 'a':
+        case SDLK_a:
             translate(0.1, 0, 0);
             break;
-        case 'd':
+        case SDLK_d:
             translate(-0.1, 0, 0);
             break;
-        case 'w':
+        case SDLK_w:
             translate(0, 0.1, 0);
             break;
-        case 's':
+        case SDLK_s:
             translate(0, -0.1, 0);
             break;
-        case 'z':
+        case SDLK_z:
             translate(0, 0, -0.05);
             break;
-        case 'c':
+        case SDLK_c:
             translate(0, 0, 0.05);
             break;
-        case 'x':
+        case SDLK_x:
             next_image();
             setup_texture();
+        default:
+            break;
     }
 }
 
@@ -701,41 +707,102 @@ int setup_listen_port(void) {
 
 int main(int argc, char * argv[]) {
     /* XXX Copy lg-xiv options, where needed */
+    const SDL_VideoInfo* info = NULL;
+
+    /* BEGIN */
+    /* Information about the current video settings. */
+    /* Dimensions of our window. */
+    /* Color depth in bits of our window. */
+    int bpp = 0;
+    /* Flags we will pass into SDL_SetVideoMode. */
+    int flags = 0;
+
+    /* END */
 
     spnav_event spev;
-    char modestring[300];
 
     struct pollfd fds[1];
     int retval;
     int recv_socket = 0;
 
+    SDL_Event event;
+
     get_options(argc, argv);
 
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
-
-    screen_width = (float) glutGet(GLUT_SCREEN_WIDTH);
-    screen_height = (float) glutGet(GLUT_SCREEN_HEIGHT);
-
-    /* XXX Make this a decent pixel size, if necessary */
-    glutInitWindowSize((int) screen_width, (int) screen_height);
-
-    /* XXX is glutEnterGameMode() superior / inferior to glutFullScreen()?
-     * Aside from that glutFullScreen() doesn't work on my system? :) */
-    /* glutFullScreen();  <-- Why doesn't this work (in my notion WM)? */
-    if (options.fullscreen) {
-        snprintf(modestring, 300, "%dx%d@32", (int) screen_width, (int) screen_height);
-        glutGameModeString(modestring);
-        glutEnterGameMode();
-    }
-    else {
-        /* XXX Do I need this? */
-        glutInitWindowPosition(100, 100);
-        glutCreateWindow("test");
+    /* SDL BEGIN */
+    /* First, initialize SDL's video subsystem. */
+    if( SDL_Init( SDL_INIT_VIDEO ) < 0 ) {
+        /* Failed, exit. */
+        fprintf( stderr, "Video initialization failed: %s\n",
+             SDL_GetError( ) );
+        exit( 1 );
     }
 
-    glutDisplayFunc(render_scene);
-    glutKeyboardFunc(handle_keyboard);
+    /* Let's get some video information. */
+    info = SDL_GetVideoInfo( );
+
+    if( !info ) {
+        /* This should probably never happen. */
+        fprintf( stderr, "Video query failed: %s\n",
+             SDL_GetError( ) );
+        exit( 1 );
+    }
+
+    /* XXX Set our width/height to 640/480 (you would of course let the user
+     * decide this in a normal app). We get the bpp we will request from the
+     * display. On X11, VidMode can't change resolution, so this is probably being
+     * overly safe. Under Win32, ChangeDisplaySettings can change the bpp.  */
+
+    screen_width = info->current_w;
+    screen_height = info->current_h;
+
+    bpp = info->vfmt->BitsPerPixel;
+
+    /*
+     * Now, we want to setup our requested window attributes for our OpenGL
+     * window.  We want *at least* 5 bits of red, green and blue. We also want
+     * at least a 16-bit depth buffer.
+     *
+     * The last thing we do is request a double buffered window. '1' turns on
+     * double buffering, '0' turns it off.
+     *
+     * Note that we do not use SDL_DOUBLEBUF in the flags to SDL_SetVideoMode.
+     * That does not affect the GL attribute state, only the standard 2D
+     * blitting setup.  */
+
+    SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 5 );
+    SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 5 );
+    SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 5 );
+    SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 16 );
+    SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
+
+    /*
+     * We want to request that SDL provide us with an OpenGL window, in a
+     * fullscreen video mode.
+     *
+     * EXERCISE:
+     * Make starting windowed an option, and handle the resize events properly
+     * with glViewport.  */
+
+    flags = SDL_OPENGL | SDL_FULLSCREEN;
+
+    /*
+     * Set the video mode
+     */
+    if( SDL_SetVideoMode( screen_width, screen_height, bpp, flags ) == 0 ) {
+        /* 
+         * This could happen for a variety of reasons,
+         * including DISPLAY not being set, the specified
+         * resolution not being available, etc.  */
+
+        fprintf( stderr, "Video mode set failed: %s\n",
+             SDL_GetError( ) );
+        exit(1);
+    }
+    /* SDL END */
+
+    /* XXX pay attention to options.fullscreen */
+
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     setup_texture();
@@ -756,7 +823,22 @@ int main(int argc, char * argv[]) {
     }
 
     while (!quit_main_loop) {
-        glutMainLoopEvent();
+        if (redraw)
+            render_scene();
+        while( SDL_PollEvent( &event ) ) {
+            switch (event.type) {
+                case SDL_KEYDOWN:
+                    /* Handle key presses. */
+                    handle_keyboard(&event.key.keysym);
+                    break;
+                case SDL_QUIT:
+                    quit_main_loop = 1;
+                    break;
+                default:
+                    /* fprintf(stderr, "Unknown event type"); */
+                    break;
+            }
+        }
         if (options.use_spacenav && get_spacenav_event(&spev, NULL)) {
             if (spev.type == SPNAV_MOTION) {
                 // Raw spacenav values range from -350 to 350
