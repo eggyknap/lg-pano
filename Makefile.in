@@ -4,13 +4,13 @@ CXXFLAGS = -Wall @CXXFLAGS@
 LDFLAGS = @LDFLAGS@
 PREFIX = @prefix@
 
-all: xiv gltest
+all: lg-pano
 
 .cpp.o:
 	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
 
-gltest.o: gltest.c
-	gcc -g -O2 -Wall -I/usr/include/GL -c gltest.c
+lg-pano.o: lg-pano.c
+	gcc -g -O2 -Wall -I/usr/include/GL -c lg-pano.c
 
 .c.o:
 	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
@@ -22,8 +22,8 @@ xiv: xiv.o xiv_utils.o xiv_readers.o read-event.o
 read-event-c.o: read-event.c
 	gcc -g -O2 -Wall -c read-event.c -o read-event-c.o
 
-gltest: gltest.o read-event-c.o
-	gcc gltest.o read-event-c.o -lGL -ljpeg -lSDL -o gltest
+lg-pano: lg-pano.o read-event-c.o
+	gcc lg-pano.o read-event-c.o -lGL -ljpeg -lSDL -o lg-pano
 
 clean:
 	rm -f xiv *~ core.* *.o

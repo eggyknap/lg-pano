@@ -35,12 +35,9 @@ AC_CHECK_FUNCS([basename])
 AC_CHECK_FUNCS([opendir])
 AC_CHECK_FUNCS([readdir])
 AC_CHECK_FUNCS([closedir])
-AC_CHECK_HEADERS([X11/Xlib.h],,[AC_MSG_ERROR([Required library X11 not found])])
-AC_CHECK_HEADERS([X11/Xutil.h],,[AC_MSG_ERROR([Required library X11 not found])])
-AC_CHECK_HEADERS([X11/Xutil.h X11/extensions/Xdbe.h],,[AC_MSG_ERROR([Required library Xext not found])],
-[[
-#include <X11/Xlib.h>
-]])
+AC_CHECK_HEADERS([SDL/SDL.h],,[AC_MSG_ERROR([Required development files for libSDL not found])])
+AC_CHECK_HEADERS([GL/gl.h],,[AC_MSG_ERROR([Required development files for libGL not found])])
+AC_CHECK_HEADERS([jpeglib.h],,[AC_MSG_ERROR([Required development files for libjpeg not found])])
 AC_CHECK_HEADERS([math.h])
 AC_CHECK_HEADERS([pthread.h])
 AC_CHECK_HEADERS([fcntl.h])
@@ -52,12 +49,9 @@ AC_CHECK_HEADERS([sys/stat.h])
 AC_CHECK_HEADERS([setjmp.h])
 AC_CHECK_HEADERS([libgen.h])
 AC_CHECK_HEADERS([dirent.h])
-AC_CHECK_LIB(jpeg,jpeg_read_scanlines,,[AC_MSG_WARN([Required library JPEG not found])])
-AC_CHECK_LIB(tiff,TIFFReadScanline,,[AC_MSG_WARN([Required library TIFF not found])])
-AC_CHECK_LIB(pthread,pthread_create,,[AC_MSG_ERROR([Required library pthread not found])])
-AC_CHECK_LIB(X11,XOpenDisplay,,[AC_MSG_ERROR([Required library X11 not found])])
-AC_CHECK_LIB(Xext,XdbeQueryExtension,,[AC_MSG_ERROR([Required library Xext not found])])
-AC_CHECK_LIB(exif,exif_data_new_from_file,,[AC_MSG_WARN([Required library EXIF not found])])
+AC_CHECK_LIB(jpeg,jpeg_read_scanlines,,[AC_MSG_ERROR([Required library libjpeg not found])])
+AC_CHECK_LIB(SDL,SDL_Init,,[AC_MSG_ERROR([Required library libSDL not found])])
+AC_CHECK_LIB(GL,glBegin,,[AC_MSG_ERROR([Required library libgl not found])])
 AC_C_CONST
 AC_FUNC_MALLOC
 AC_HEADER_STDBOOL

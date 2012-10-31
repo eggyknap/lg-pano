@@ -3455,48 +3455,44 @@ fi
 done
 
 
-for ac_header in X11/Xlib.h
+for ac_header in SDL/SDL.h
 do :
-  ac_fn_cxx_check_header_mongrel "$LINENO" "X11/Xlib.h" "ac_cv_header_X11_Xlib_h" "$ac_includes_default"
-if test "x$ac_cv_header_X11_Xlib_h" = xyes; then :
+  ac_fn_cxx_check_header_mongrel "$LINENO" "SDL/SDL.h" "ac_cv_header_SDL_SDL_h" "$ac_includes_default"
+if test "x$ac_cv_header_SDL_SDL_h" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_X11_XLIB_H 1
+#define HAVE_SDL_SDL_H 1
 _ACEOF
 
 else
-  as_fn_error $? "Required library X11 not found" "$LINENO" 5
+  as_fn_error $? "Required development files for libSDL not found" "$LINENO" 5
 fi
 
 done
 
-for ac_header in X11/Xutil.h
+for ac_header in GL/gl.h
 do :
-  ac_fn_cxx_check_header_mongrel "$LINENO" "X11/Xutil.h" "ac_cv_header_X11_Xutil_h" "$ac_includes_default"
-if test "x$ac_cv_header_X11_Xutil_h" = xyes; then :
+  ac_fn_cxx_check_header_mongrel "$LINENO" "GL/gl.h" "ac_cv_header_GL_gl_h" "$ac_includes_default"
+if test "x$ac_cv_header_GL_gl_h" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_X11_XUTIL_H 1
+#define HAVE_GL_GL_H 1
 _ACEOF
 
 else
-  as_fn_error $? "Required library X11 not found" "$LINENO" 5
+  as_fn_error $? "Required development files for libGL not found" "$LINENO" 5
 fi
 
 done
 
-for ac_header in X11/Xutil.h X11/extensions/Xdbe.h
+for ac_header in jpeglib.h
 do :
-  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
-ac_fn_cxx_check_header_compile "$LINENO" "$ac_header" "$as_ac_Header" "
-#include <X11/Xlib.h>
-
-"
-if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
+  ac_fn_cxx_check_header_mongrel "$LINENO" "jpeglib.h" "ac_cv_header_jpeglib_h" "$ac_includes_default"
+if test "x$ac_cv_header_jpeglib_h" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
+#define HAVE_JPEGLIB_H 1
 _ACEOF
 
 else
-  as_fn_error $? "Required library Xext not found" "$LINENO" 5
+  as_fn_error $? "Required development files for libjpeg not found" "$LINENO" 5
 fi
 
 done
@@ -3677,17 +3673,16 @@ _ACEOF
   LIBS="-ljpeg $LIBS"
 
 else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Required library JPEG not found" >&5
-$as_echo "$as_me: WARNING: Required library JPEG not found" >&2;}
+  as_fn_error $? "Required library libjpeg not found" "$LINENO" 5
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for TIFFReadScanline in -ltiff" >&5
-$as_echo_n "checking for TIFFReadScanline in -ltiff... " >&6; }
-if ${ac_cv_lib_tiff_TIFFReadScanline+:} false; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for SDL_Init in -lSDL" >&5
+$as_echo_n "checking for SDL_Init in -lSDL... " >&6; }
+if ${ac_cv_lib_SDL_SDL_Init+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-ltiff  $LIBS"
+LIBS="-lSDL  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -3697,45 +3692,44 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 #ifdef __cplusplus
 extern "C"
 #endif
-char TIFFReadScanline ();
+char SDL_Init ();
 int
 main ()
 {
-return TIFFReadScanline ();
+return SDL_Init ();
   ;
   return 0;
 }
 _ACEOF
 if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_tiff_TIFFReadScanline=yes
+  ac_cv_lib_SDL_SDL_Init=yes
 else
-  ac_cv_lib_tiff_TIFFReadScanline=no
+  ac_cv_lib_SDL_SDL_Init=no
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_tiff_TIFFReadScanline" >&5
-$as_echo "$ac_cv_lib_tiff_TIFFReadScanline" >&6; }
-if test "x$ac_cv_lib_tiff_TIFFReadScanline" = xyes; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_SDL_SDL_Init" >&5
+$as_echo "$ac_cv_lib_SDL_SDL_Init" >&6; }
+if test "x$ac_cv_lib_SDL_SDL_Init" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBTIFF 1
+#define HAVE_LIBSDL 1
 _ACEOF
 
-  LIBS="-ltiff $LIBS"
+  LIBS="-lSDL $LIBS"
 
 else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Required library TIFF not found" >&5
-$as_echo "$as_me: WARNING: Required library TIFF not found" >&2;}
+  as_fn_error $? "Required library libSDL not found" "$LINENO" 5
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for pthread_create in -lpthread" >&5
-$as_echo_n "checking for pthread_create in -lpthread... " >&6; }
-if ${ac_cv_lib_pthread_pthread_create+:} false; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for glBegin in -lGL" >&5
+$as_echo_n "checking for glBegin in -lGL... " >&6; }
+if ${ac_cv_lib_GL_glBegin+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-lpthread  $LIBS"
+LIBS="-lGL  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -3745,177 +3739,35 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 #ifdef __cplusplus
 extern "C"
 #endif
-char pthread_create ();
+char glBegin ();
 int
 main ()
 {
-return pthread_create ();
+return glBegin ();
   ;
   return 0;
 }
 _ACEOF
 if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_pthread_pthread_create=yes
+  ac_cv_lib_GL_glBegin=yes
 else
-  ac_cv_lib_pthread_pthread_create=no
+  ac_cv_lib_GL_glBegin=no
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pthread_pthread_create" >&5
-$as_echo "$ac_cv_lib_pthread_pthread_create" >&6; }
-if test "x$ac_cv_lib_pthread_pthread_create" = xyes; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_GL_glBegin" >&5
+$as_echo "$ac_cv_lib_GL_glBegin" >&6; }
+if test "x$ac_cv_lib_GL_glBegin" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBPTHREAD 1
+#define HAVE_LIBGL 1
 _ACEOF
 
-  LIBS="-lpthread $LIBS"
+  LIBS="-lGL $LIBS"
 
 else
-  as_fn_error $? "Required library pthread not found" "$LINENO" 5
-fi
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for XOpenDisplay in -lX11" >&5
-$as_echo_n "checking for XOpenDisplay in -lX11... " >&6; }
-if ${ac_cv_lib_X11_XOpenDisplay+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lX11  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char XOpenDisplay ();
-int
-main ()
-{
-return XOpenDisplay ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_X11_XOpenDisplay=yes
-else
-  ac_cv_lib_X11_XOpenDisplay=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_X11_XOpenDisplay" >&5
-$as_echo "$ac_cv_lib_X11_XOpenDisplay" >&6; }
-if test "x$ac_cv_lib_X11_XOpenDisplay" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBX11 1
-_ACEOF
-
-  LIBS="-lX11 $LIBS"
-
-else
-  as_fn_error $? "Required library X11 not found" "$LINENO" 5
-fi
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for XdbeQueryExtension in -lXext" >&5
-$as_echo_n "checking for XdbeQueryExtension in -lXext... " >&6; }
-if ${ac_cv_lib_Xext_XdbeQueryExtension+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lXext  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char XdbeQueryExtension ();
-int
-main ()
-{
-return XdbeQueryExtension ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_Xext_XdbeQueryExtension=yes
-else
-  ac_cv_lib_Xext_XdbeQueryExtension=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_Xext_XdbeQueryExtension" >&5
-$as_echo "$ac_cv_lib_Xext_XdbeQueryExtension" >&6; }
-if test "x$ac_cv_lib_Xext_XdbeQueryExtension" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBXEXT 1
-_ACEOF
-
-  LIBS="-lXext $LIBS"
-
-else
-  as_fn_error $? "Required library Xext not found" "$LINENO" 5
-fi
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for exif_data_new_from_file in -lexif" >&5
-$as_echo_n "checking for exif_data_new_from_file in -lexif... " >&6; }
-if ${ac_cv_lib_exif_exif_data_new_from_file+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lexif  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char exif_data_new_from_file ();
-int
-main ()
-{
-return exif_data_new_from_file ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_exif_exif_data_new_from_file=yes
-else
-  ac_cv_lib_exif_exif_data_new_from_file=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_exif_exif_data_new_from_file" >&5
-$as_echo "$ac_cv_lib_exif_exif_data_new_from_file" >&6; }
-if test "x$ac_cv_lib_exif_exif_data_new_from_file" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBEXIF 1
-_ACEOF
-
-  LIBS="-lexif $LIBS"
-
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Required library EXIF not found" >&5
-$as_echo "$as_me: WARNING: Required library EXIF not found" >&2;}
+  as_fn_error $? "Required library libgl not found" "$LINENO" 5
 fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for an ANSI C-conforming const" >&5

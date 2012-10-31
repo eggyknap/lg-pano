@@ -23,7 +23,7 @@
 #define HAVE_INTTYPES_H 1
 
 /* Define to 1 if you have the <jpeglib.h> header file. */
-/* #undef HAVE_JPEGLIB_H */
+#define HAVE_JPEGLIB_H 1
 
 /* Define to 1 if you have the `exif' library (-lexif). */
 /* #undef HAVE_LIBEXIF */
@@ -38,7 +38,7 @@
 #define HAVE_LIBJPEG 1
 
 /* Define to 1 if you have the `tiff' library (-ltiff). */
-#define HAVE_LIBTIFF 1
+/* #undef HAVE_LIBTIFF */
 
 /* Define to 1 if you have the `longjmp' function. */
 #define HAVE_LONGJMP 1
@@ -135,10 +135,10 @@
 #define HAVE_UNLINK 1
 
 /* Define to 1 if you have the <X11/Xlib.h> header file. */
-#define HAVE_X11_XLIB_H 1
+/* #undef HAVE_X11_XLIB_H */
 
 /* Define to 1 if you have the <X11/Xutil.h> header file. */
-#define HAVE_X11_XUTIL_H 1
+/* #undef HAVE_X11_XUTIL_H */
 
 /* Define to 1 if the system has the type `_Bool'. */
 /* #undef HAVE__BOOL */
