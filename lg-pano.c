@@ -1,7 +1,6 @@
 /* TODO:
  *      -- Support xoffset
  *      -- Constrain movement
- *      -- Add freeglut and any other necessary libraries to autoconf stuff
  *      -- Handle directories of images gracefully
  */
 
@@ -35,7 +34,6 @@ float
 int quit_main_loop = 0;     /* Flag to exit the program */
 int image_index = 0,        /* Which image are we supposed to be looking at now? */
     num_images = 0;
-char **images;              /* Array of image names, initialized from argv */
 int screen_width, screen_height;
 float texture_aspect;
 unsigned int texture_width, texture_height;
@@ -52,6 +50,13 @@ struct slavehost_s {
     LIST_ENTRY(slavehost_s) entries;
 };
 LIST_HEAD(slavelisthead, slavehost_s) slave_list;
+
+/* List of image names, initialized from argv */
+struct image_s {
+    char *filename;
+    TAILQ_ENTRY(image_s) entries;
+};
+TAILQ_HEAD(imagelisthead, image_s) image_list;
 
 struct {
     int verbose, fullscreen;
@@ -210,6 +215,9 @@ int setup_slave(struct slavehost_s *slave, const int broadcast, char *args) {
 void get_options(const int argc, char * const argv[]) {
     int opt_index, c, broadcast;
     struct slavehost_s *new_slave;
+    char *image_file;
+    int i;
+    struct image_s *img;
     
     while (1) {
         broadcast = 0;
@@ -285,15 +293,26 @@ void get_options(const int argc, char * const argv[]) {
     }
 
     if (optind < argc) {
-        /* Setup images array */
-        num_images = argc - optind;
-        images = malloc(num_images * sizeof(char *));
+        /* Setup images tail queue */
+        TAILQ_INIT(&image_list);
 
-        if (!images) {
-            fprintf(stderr, "ERROR: Couldn't allocate memory for image array.\n");
-            exit(-1);
+        num_images = argc - optind;
+        for (i = optind; i < argc; i++) {
+            image_file = (char *) malloc(strlen(argv[i]));
+            if (!image_file) {
+                perror("Couldn't allocate memory for image name");
+                exit(1);
+            }
+            strcpy(image_file, argv[i]);
+            img = (struct image_s *) malloc(sizeof(struct image_s));
+            if (!img) {
+                perror("Couldn't allocate memory for image structure");
+                exit(1);
+            }
+            img->filename = image_file;
+            TAILQ_INSERT_TAIL(&image_list, img, entries);
         }
-        memcpy(images, argv + optind, sizeof(char *) * num_images);
+
         /* XXX Perhaps make this preload the images, so I don't have to reload
          * them each time I cycle into one */
     }
@@ -572,6 +591,18 @@ unsigned char *read_JPEG_file (char * filename, unsigned int *width, unsigned in
     return pixels;
 }
 
+char *image_at(int i) {
+    struct image_s *image;
+    int p = 0;
+
+    TAILQ_FOREACH(image, &image_list, entries) {
+        if (p == i) break;
+        p++;
+    }
+
+    return (image->filename);
+}
+
 void setup_texture(void) {
     /* MagickWand *wand; */
 
@@ -583,7 +614,7 @@ void setup_texture(void) {
     if (tex_buffer != NULL)
         free(tex_buffer);
 
-    tex_buffer = read_JPEG_file(images[image_index], &texture_width, &texture_height);
+    tex_buffer = read_JPEG_file(image_at(image_index), &texture_width, &texture_height);
     texture_aspect = 1.0 * texture_width / texture_height;
 
 /*    tex_buffer = (unsigned char *) malloc(texture_height * texture_width * 3);
