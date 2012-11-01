@@ -1,7 +1,7 @@
 /* TODO:
  *      -- Support xoffset
  *      -- Constrain movement
- *      -- Handle directories of images gracefully
+ *      -- Sort image files found in directories
  */
 
 /* #include <freeglut.h> */
