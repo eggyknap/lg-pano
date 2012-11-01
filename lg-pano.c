@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <dirent.h>
 #include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -19,6 +20,7 @@
 #include <arpa/inet.h>
 #include <poll.h>
 #include <sys/queue.h>
+#include <sys/stat.h>
 #include <jpeglib.h>
 #include <setjmp.h>
 #include "read-event.h"
@@ -211,13 +213,24 @@ int setup_slave(struct slavehost_s *slave, const int broadcast, char *args) {
     return 1;
 }
 
+int is_directory(const char *name) {
+    struct stat statbuf;
+    if (stat(name, &statbuf) == -1) {
+        perror("Getting information about image file");
+        return 0;
+    }
+
+    return (S_ISDIR(statbuf.st_mode));
+}
 
 void get_options(const int argc, char * const argv[]) {
     int opt_index, c, broadcast;
     struct slavehost_s *new_slave;
     char *image_file;
-    int i;
+    int i, imgnamelen;
     struct image_s *img;
+    DIR *dirfd;
+    struct dirent *d;
     
     while (1) {
         broadcast = 0;
@@ -294,27 +307,86 @@ void get_options(const int argc, char * const argv[]) {
 
     if (optind < argc) {
         /* Setup images tail queue */
+
+        /* XXX Perhaps make this preload the images, so I don't have to reload
+         * them each time I cycle into one. */
+        /* XXX Another option is to test each file to be sure it's a real JPG
+         * file before adding it to the list */
+
         TAILQ_INIT(&image_list);
 
         num_images = argc - optind;
         for (i = optind; i < argc; i++) {
-            image_file = (char *) malloc(strlen(argv[i]));
-            if (!image_file) {
-                perror("Couldn't allocate memory for image name");
-                exit(1);
+            if (is_directory(argv[i])) {
+                /* Read through this directory and load all files */
+                dirfd = opendir(argv[i]);
+                if (! dirfd) {
+                    perror("Couldn't open directory");
+                    continue;
+                }
+
+                while ((d = readdir(dirfd))) {
+                    imgnamelen = strlen(argv[i]) + 2 + strlen(d->d_name);
+                    printf("Allocating to %d\n", imgnamelen);
+                    image_file = (char *) malloc(imgnamelen);
+                    /*}
+                    else {
+                        if (imgnamelen < strlen(argv[i]) + 2 + strlen(d->d_name)) {
+                            imgnamelen = strlen(argv[i]) + 2 + strlen(d->d_name);
+                            printf("Reallocating to %d\n", imgnamelen);
+                            image_file = (char *) realloc(image_file, imgnamelen);
+                        }
+                    }*/
+                    if (!image_file) {
+                        perror("Couldn't allocate memory for reconstructed filename");
+                        exit(1);
+                    }
+                    sprintf(image_file, "%s/%s", argv[i], d->d_name);
+                    printf("Allocated %s\n", image_file);
+
+                    if (!is_directory(image_file)) {
+                        img = (struct image_s *) malloc(sizeof(struct image_s));
+                        if (!img) {
+                            perror("Couldn't allocate image structure");
+                            exit(1);
+                        }
+                        img->filename = image_file;
+                        if (!img->filename) {
+                            perror("Couldn't duplicate filename");
+                            exit(1);
+                        }
+                        TAILQ_INSERT_TAIL(&image_list, img, entries);
+                    }
+                    else {
+                        printf("File isn't a normal file.\n");
+                    }
+                }
+/*                if (imgnamelen > 0) {
+                    printf("Freeing image...\n");
+                    free(image_file);
+                } */
             }
-            strcpy(image_file, argv[i]);
-            img = (struct image_s *) malloc(sizeof(struct image_s));
-            if (!img) {
-                perror("Couldn't allocate memory for image structure");
-                exit(1);
+            else {
+                /* This is apparently a single image */
+                image_file = strdup(argv[i]);
+                if (!image_file) {
+                    perror("Couldn't allocate memory for image name");
+                    exit(1);
+                }
+                img = (struct image_s *) malloc(sizeof(struct image_s));
+                if (!img) {
+                    perror("Couldn't allocate memory for image structure");
+                    exit(1);
+                }
+                img->filename = image_file;
+                TAILQ_INSERT_TAIL(&image_list, img, entries);
             }
-            img->filename = image_file;
-            TAILQ_INSERT_TAIL(&image_list, img, entries);
         }
 
-        /* XXX Perhaps make this preload the images, so I don't have to reload
-         * them each time I cycle into one */
+        num_images = 0;
+        TAILQ_FOREACH(img, &image_list, entries) {
+            num_images++;
+        }
     }
     else {
         fprintf(stderr, "ERROR: No images found on the command line\n");
@@ -600,6 +672,7 @@ char *image_at(int i) {
         p++;
     }
 
+    printf("Returning %s for image file %d\n", image->filename, i);
     return (image->filename);
 }
 
@@ -815,7 +888,9 @@ int main(int argc, char * argv[]) {
      * Make starting windowed an option, and handle the resize events properly
      * with glViewport.  */
 
-    flags = SDL_OPENGL | SDL_FULLSCREEN;
+    flags = SDL_OPENGL;
+    if (options.fullscreen)
+        flags |= SDL_FULLSCREEN;
 
     /*
      * Set the video mode
