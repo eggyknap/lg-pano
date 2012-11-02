@@ -66,9 +66,7 @@ struct {
     float sensitivity;
     char *spacenav_dev;
     char listenaddr[ADDR_LEN];
-    int valid_listenaddr;
-    int listenport;
-    int multicast;
+    int valid_listenaddr, listenport, multicast, xoffset;
 } options = {
     0,      /* verbose */
     0,      /* fullscreen */
@@ -79,7 +77,8 @@ struct {
     "",     /* listenaddr */
     0,      /* valid listenaddr */
     -1,     /* listenport */
-    0       /* multicast */
+    0,      /* multicast */
+    0       /* xoffset */
 };
 
 void setup_texture(void);
@@ -111,6 +110,8 @@ void usage(const char *pname) {
 "\t--slave=addr:port, --bcastslave=addr:port\n"
 "\t\tAdds addr:port as a slave to receive UDP synchronization traffic. The bcastslave\n"
 "\t\toption indicates that the slave's address is a broadcast address\n"
+"\t--xoffset=##\n"
+"\t\tDisplaces image by ## pixels horizontally. Numbers may be negative or positive.\n"
     );
 }
 
@@ -243,6 +244,7 @@ void get_options(const int argc, char * const argv[]) {
             { "help",        no_argument,        NULL, 'h' },
             { "listen",      required_argument,  NULL, 'l' },
             { "multicast",   no_argument,        NULL, 'm' },
+            { "xoffset",     required_argument,  NULL, 'o' },
             { "spacenav",    optional_argument,  NULL, 's' },
             { "verbose",     no_argument,        NULL, 'v' },
             { "swapaxes",    no_argument,        NULL, 'w' },
@@ -253,6 +255,9 @@ void get_options(const int argc, char * const argv[]) {
         if (c == -1) break;
 
         switch (c) {
+            case 'o':
+                options.xoffset = atoi(optarg);
+                break;
             case 'm':
                 options.multicast = 1;
                 break;
@@ -413,8 +418,10 @@ void translate(float h, float v, float z) {
         fprintf(stderr, "Violated zoom constraint (val: %f, delta: %f)\n", zoom_factor, z);
     }
 
-    xmin = (h + horiz_disp) + 0.5 - 1.0 / 2.0 / zoom_factor * x2y;
-    xmax = (h + horiz_disp) + 0.5 + 1.0 / 2.0 / zoom_factor * x2y;
+    xmin = (h + horiz_disp) + 0.5 - 1.0 / 2.0 / zoom_factor * x2y
+        + (1.0 * options.xoffset) / screen_width;
+    xmax = (h + horiz_disp) + 0.5 + 1.0 / 2.0 / zoom_factor * x2y
+        + (1.0 * options.xoffset) / screen_width;
 
     ymin = (v + vert_disp) + 0.5 - 1.0 / 2.0 / zoom_factor;
     ymax = (v + vert_disp) + 0.5 + 1.0 / 2.0 / zoom_factor;
