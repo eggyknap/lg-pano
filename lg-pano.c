@@ -1,5 +1,4 @@
 /* TODO:
- *      -- Support xoffset
  *      -- Constrain movement
  *      -- Sort image files found in directories
  */
