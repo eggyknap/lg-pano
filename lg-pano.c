@@ -943,6 +943,11 @@ int main(int argc, char * argv[]) {
                     /* Handle key presses. */
                     handle_keyboard(&event.key.keysym);
                     break;
+                case SDL_SYSWMEVENT:
+                case SDL_VIDEORESIZE:
+                case SDL_VIDEOEXPOSE:
+                    redraw = 1;
+                    break;
                 case SDL_QUIT:
                     quit_main_loop = 1;
                     break;
