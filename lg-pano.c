@@ -26,6 +26,8 @@
 #define ADDR_LEN 500
 
 const char VERSION[] = "0.1";
+const char *BUILD_DATE = __DATE__;
+const char *BUILD_TIME = __TIME__;
 
 unsigned char *tex_buffer;
 float
@@ -83,8 +85,8 @@ struct {
 void setup_texture(void);
 
 void usage(const char *pname) {
-    fprintf(stderr, "%s%s\n\n%s%s%s\n",
-"Liquid Galaxy Panoramic Image Viewer, version ", VERSION,
+    fprintf(stderr, "%s%s%s%s%s%s\n\n%s%s%s\n",
+"Liquid Galaxy Panoramic Image Viewer, version ", VERSION, "\t\tBuilt ", BUILD_DATE, ", ", BUILD_TIME,
 "USAGE: ", pname, " <options> image_file[, image_file, ...]\n\n"
 "OPTIONS:\n"
 "\t-v, --verbose\n"
@@ -359,6 +361,8 @@ void get_options(const int argc, char * const argv[]) {
                             perror("Couldn't duplicate filename");
                             exit(1);
                         }
+                        if (options.verbose)
+                            fprintf(stderr, "Adding file %s\n", img->filename);
                         TAILQ_INSERT_TAIL(&image_list, img, entries);
                     }
                     else {
@@ -971,6 +975,7 @@ int main(int argc, char * argv[]) {
                 if (spev.type == SPNAV_BUTTON && spev.value == 0) {
                     // Left spnav button goes to previous image, right one goes to next image
                     image_index += spev.button * 2 - 1;
+                    setup_texture();
                 }
             }
         }
