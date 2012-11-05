@@ -3,10 +3,9 @@
  *      -- Sort image files found in directories
  */
 
+/* #include <freeglut.h> */
 #include <GL/gl.h>
-#include <GL/glx.h>
-#include <X11/Xlib.h>
-#include <X11/keysym.h>
+#include <SDL/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,8 +45,6 @@ int *send_sockets;
 int num_sockets = 0;
 int has_slaves = 0;
 int redraw = 1;
-Display *dpy;
-Window win;
 
 struct slavehost_s {
     char addr[ADDR_LEN];
@@ -516,7 +513,7 @@ static void render_scene(void) {
     glEnd();
     glDisable(GL_TEXTURE_2D);
 
-    glXSwapBuffers(dpy, win);
+    SDL_GL_SwapBuffers();
 }
 
 /* This struct, my_error_exit, and read_JPEG_file were lifted wholesale from
@@ -737,7 +734,7 @@ void next_image(void) {
     if (image_index >= num_images)
         image_index = 0;
 }
-/*
+
 void handle_keyboard(SDL_keysym* keysym ) {
     switch(keysym->sym) {
         case SDLK_q:
@@ -768,7 +765,6 @@ void handle_keyboard(SDL_keysym* keysym ) {
             break;
     }
 }
-*/
 
 int setup_listen_port(void) {
     int recv_socket = 0, so_reuseaddr = 1;
@@ -825,24 +821,9 @@ int setup_listen_port(void) {
 
 int main(int argc, char * argv[]) {
     /* XXX Copy lg-xiv options, where needed */
+    const SDL_VideoInfo* info = NULL;
     int bpp = 0;
     int flags = 0;
-
-    Window root;
-    GLXContext ctx;
-    int scrnum;
-    XSetWindowAttributes attr;
-    unsigned long mask;
-    XVisualInfo *visinfo;
-    int attrib[] = {
-        GLX_RGBA,
-        GLX_RED_SIZE, 1,
-        GLX_GREEN_SIZE, 1,
-        GLX_BLUE_SIZE, 1,
-        GLX_DOUBLEBUFFER,
-        GLX_DEPTH_SIZE, 1,
-        None
-    };
 
     spnav_event spev;
 
@@ -850,57 +831,10 @@ int main(int argc, char * argv[]) {
     int retval;
     int recv_socket = 0;
 
+    SDL_Event event;
+
     get_options(argc, argv);
 
-    dpy = XOpenDisplay(NULL);
-    if (!dpy) {
-        fprintf(stderr, "Couldn't connect to display!");
-        exit(1);
-    }
-
-    /* Window setup code based heavily on Brian Paul's glxgears demo,
-     * http://cvsweb.xfree86.org/cvsweb/xc/programs/glxgears/glxgears.c?rev=1.3 */
-
-    scrnum = DefaultScreen(dpy);
-    root = RootWindow(dpy, scrnum);
-    visinfo = glXChooseVisual(dpy, scrnum, attrib);
-    if (!visinfo) {
-        fprintf(stderr, "Couldn't get an RGBA, double-buffered visual\n");
-        exit(1);
-    }
-
-    attr.background_pixel = 0;
-    attr.border_pixel = 0;
-    attr.colormap = XCreateColormap(dpy, root, visinfo->visual, AllocNone);
-    attr.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask;
-    mask = CWBackPixel | CWBorderPixel | CWColormap | CWEventMask;
-
-    /* XXX deal with window size, fullscreen appropriately */
-    win = XCreateWindow(dpy, root, 0, 0, 640, 480, 0, visinfo->depth, InputOutput, visinfo->visual, mask, &attr);
-    /* XXX figure out what this does, and see if I need to do it */
-    {
-        XSizeHints sizehints;
-        sizehints.x = 0;
-        sizehints.y = 0;
-        sizehints.width = 640;
-        sizehints.height = 480;
-        sizehints.flags = USSize | USPosition;
-        XSetNormalHints(dpy, win, &sizehints);
-        /* XXX set window name and class from cmd line */
-        XSetStandardProperties(dpy, win, "window-name", "window-name", None, (char **) NULL, 0, &sizehints);
-    }
-
-    ctx = glXCreateContext(dpy, visinfo, NULL, True);
-    if (!ctx) {
-        fprintf(stderr, "glXCreateContext() failed\n");
-        exit(1);
-    }
-    XFree(visinfo);
-
-    XMapWindow(dpy, win);
-    glXMakeCurrent(dpy, win, ctx);
-
-    /*
     if( SDL_Init( SDL_INIT_VIDEO ) < 0 ) {
         fprintf( stderr, "Video initialization failed: %s\n",
              SDL_GetError( ) );
@@ -910,7 +844,7 @@ int main(int argc, char * argv[]) {
     info = SDL_GetVideoInfo( );
 
     if( !info ) {
-        // This should probably never happen.
+        /* This should probably never happen. */
         fprintf( stderr, "Video query failed: %s\n",
              SDL_GetError( ) );
         exit( 1 );
@@ -936,7 +870,6 @@ int main(int argc, char * argv[]) {
              SDL_GetError( ) );
         exit(1);
     }
-    */
 
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -960,13 +893,11 @@ int main(int argc, char * argv[]) {
     while (!quit_main_loop) {
         if (redraw)
             render_scene();
-            /*
         while( SDL_PollEvent( &event ) ) {
             switch (event.type) {
                 case SDL_KEYDOWN:
-                    /* XXX Handle key presses. */
-                    /*handle_keyboard(&event.key.keysym); */
-                    /*
+                    /* Handle key presses. */
+                    handle_keyboard(&event.key.keysym);
                     break;
                 case SDL_SYSWMEVENT:
                 case SDL_VIDEORESIZE:
@@ -978,10 +909,9 @@ int main(int argc, char * argv[]) {
                     break;
                 default:
                     /* fprintf(stderr, "Unknown event type"); */
-                    /*
                     break;
             }
-        } */
+        }
         if (options.use_spacenav && get_spacenav_event(&spev, NULL)) {
             if (spev.type == SPNAV_MOTION) {
                 // Raw spacenav values range from -350 to 350
@@ -1014,10 +944,5 @@ int main(int argc, char * argv[]) {
         usleep(200);
     }
     free(tex_buffer);
-
-    glXDestroyContext(dpy, ctx);
-    XDestroyWindow(dpy, win);
-    XCloseDisplay(dpy);
-
     return 0;
 }
