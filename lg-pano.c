@@ -718,6 +718,11 @@ void setup_texture(void) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
+    glTexImage2D(GL_PROXY_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
+    if (glGetError() != GL_NO_ERROR) {
+        fprintf(stderr, "Error: There was a problem making this texture work\n");
+        exit(1);
+    }
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
 
     horiz_disp = vert_disp = 0;
