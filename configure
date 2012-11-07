@@ -3483,19 +3483,19 @@ fi
 
 done
 
-for ac_header in /usr/include/GraphicsMagick/wand/magick_wand.h
-do :
-  ac_fn_cxx_check_header_mongrel "$LINENO" "/usr/include/GraphicsMagick/wand/magick_wand.h" "ac_cv_header__usr_include_GraphicsMagick_wand_magick_wand_h" "$ac_includes_default"
-if test "x$ac_cv_header__usr_include_GraphicsMagick_wand_magick_wand_h" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE__USR_INCLUDE_GRAPHICSMAGICK_WAND_MAGICK_WAND_H 1
-_ACEOF
+
+# XXX this should be better
+CPPFLAGS_save="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS $(pkg-config --cflags GraphicsMagick)"
+ac_fn_cxx_check_header_mongrel "$LINENO" "wand/magick_wand.h" "ac_cv_header_wand_magick_wand_h" "$ac_includes_default"
+if test "x$ac_cv_header_wand_magick_wand_h" = xyes; then :
 
 else
-  as_fn_error $? "Required development files for GraphicsMagick not found" "$LINENO" 5
+  as_fn_error $? "Required development files for ImageMagick and/or GraphicsMagick not found" "$LINENO" 5
 fi
 
-done
+
+CPPFLAGS="$CPPFLAGS_save"
 
 for ac_header in math.h
 do :

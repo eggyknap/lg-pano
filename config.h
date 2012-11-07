@@ -23,7 +23,7 @@
 #define HAVE_INTTYPES_H 1
 
 /* Define to 1 if you have the <jpeglib.h> header file. */
-#define HAVE_JPEGLIB_H 1
+/* #undef HAVE_JPEGLIB_H */
 
 /* Define to 1 if you have the `exif' library (-lexif). */
 /* #undef HAVE_LIBEXIF */
