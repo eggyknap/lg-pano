@@ -35,7 +35,7 @@
 #define HAVE_LIBGEN_H 1
 
 /* Define to 1 if you have the `jpeg' library (-ljpeg). */
-#define HAVE_LIBJPEG 1
+/* #undef HAVE_LIBJPEG */
 
 /* Define to 1 if you have the `tiff' library (-ltiff). */
 /* #undef HAVE_LIBTIFF */

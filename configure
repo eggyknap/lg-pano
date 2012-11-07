@@ -3483,16 +3483,16 @@ fi
 
 done
 
-for ac_header in jpeglib.h
+for ac_header in /usr/include/GraphicsMagick/wand/magick_wand.h
 do :
-  ac_fn_cxx_check_header_mongrel "$LINENO" "jpeglib.h" "ac_cv_header_jpeglib_h" "$ac_includes_default"
-if test "x$ac_cv_header_jpeglib_h" = xyes; then :
+  ac_fn_cxx_check_header_mongrel "$LINENO" "/usr/include/GraphicsMagick/wand/magick_wand.h" "ac_cv_header__usr_include_GraphicsMagick_wand_magick_wand_h" "$ac_includes_default"
+if test "x$ac_cv_header__usr_include_GraphicsMagick_wand_magick_wand_h" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_JPEGLIB_H 1
+#define HAVE__USR_INCLUDE_GRAPHICSMAGICK_WAND_MAGICK_WAND_H 1
 _ACEOF
 
 else
-  as_fn_error $? "Required development files for libjpeg not found" "$LINENO" 5
+  as_fn_error $? "Required development files for GraphicsMagick not found" "$LINENO" 5
 fi
 
 done
@@ -3629,13 +3629,14 @@ fi
 
 done
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for jpeg_read_scanlines in -ljpeg" >&5
-$as_echo_n "checking for jpeg_read_scanlines in -ljpeg... " >&6; }
-if ${ac_cv_lib_jpeg_jpeg_read_scanlines+:} false; then :
+# XXX Make imagemagick support possible
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for MagickReadImage in -lGraphicsMagickWand" >&5
+$as_echo_n "checking for MagickReadImage in -lGraphicsMagickWand... " >&6; }
+if ${ac_cv_lib_GraphicsMagickWand_MagickReadImage+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-ljpeg  $LIBS"
+LIBS="-lGraphicsMagickWand  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -3645,35 +3646,35 @@ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 #ifdef __cplusplus
 extern "C"
 #endif
-char jpeg_read_scanlines ();
+char MagickReadImage ();
 int
 main ()
 {
-return jpeg_read_scanlines ();
+return MagickReadImage ();
   ;
   return 0;
 }
 _ACEOF
 if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_jpeg_jpeg_read_scanlines=yes
+  ac_cv_lib_GraphicsMagickWand_MagickReadImage=yes
 else
-  ac_cv_lib_jpeg_jpeg_read_scanlines=no
+  ac_cv_lib_GraphicsMagickWand_MagickReadImage=no
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_jpeg_jpeg_read_scanlines" >&5
-$as_echo "$ac_cv_lib_jpeg_jpeg_read_scanlines" >&6; }
-if test "x$ac_cv_lib_jpeg_jpeg_read_scanlines" = xyes; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_GraphicsMagickWand_MagickReadImage" >&5
+$as_echo "$ac_cv_lib_GraphicsMagickWand_MagickReadImage" >&6; }
+if test "x$ac_cv_lib_GraphicsMagickWand_MagickReadImage" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBJPEG 1
+#define HAVE_LIBGRAPHICSMAGICKWAND 1
 _ACEOF
 
-  LIBS="-ljpeg $LIBS"
+  LIBS="-lGraphicsMagickWand $LIBS"
 
 else
-  as_fn_error $? "Required library libjpeg not found" "$LINENO" 5
+  as_fn_error $? "Required library GraphicsMagick not found" "$LINENO" 5
 fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for SDL_Init in -lSDL" >&5
