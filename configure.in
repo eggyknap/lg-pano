@@ -1,4 +1,4 @@
-AC_INIT(xiv.cpp)
+AC_INIT(lg-pano.c)
 AC_CONFIG_HEADER([config.h])
             
 VERSION="0.8"

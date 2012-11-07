@@ -562,7 +562,7 @@ PACKAGE_STRING=
 PACKAGE_BUGREPORT=
 PACKAGE_URL=
 
-ac_unique_file="xiv.cpp"
+ac_unique_file="lg-pano.c"
 # Factoring default headers for most tests.
 ac_includes_default="\
 #include <stdio.h>
