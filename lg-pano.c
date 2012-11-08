@@ -33,9 +33,12 @@ float
     zoom_factor = 1,    /* 1 == "normal size" */
     horiz_disp = 0,     /* disp == displacement */
     vert_disp = 0;
+int texnum = 0;
 int quit_main_loop = 0;     /* Flag to exit the program */
 int image_index = 0,        /* Which image are we supposed to be looking at now? */
-    num_images = 0;
+    num_images = 0,
+    num_textures = 1;
+GLuint *texture_names;
 int screen_width, screen_height;
 float texture_aspect;
 unsigned int texture_width, texture_height;
@@ -47,7 +50,7 @@ int redraw = 1;
 
 struct slavehost_s {
     char addr[ADDR_LEN];
-    int port, broadcast;
+    unsigned int port, broadcast;
     int socket;
     LIST_ENTRY(slavehost_s) entries;
 };
@@ -66,7 +69,9 @@ struct {
     float sensitivity;
     char *spacenav_dev;
     char listenaddr[ADDR_LEN];
-    int valid_listenaddr, listenport, multicast, xoffset;
+    unsigned int valid_listenaddr, listenport, multicast;
+    int xoffset;
+    unsigned int subtexsize, forcesubtex;
 } options = {
     0,      /* verbose */
     0,      /* fullscreen */
@@ -78,7 +83,9 @@ struct {
     0,      /* valid listenaddr */
     -1,     /* listenport */
     0,      /* multicast */
-    0       /* xoffset */
+    0,      /* xoffset */
+    1000,   /* size of subtextures when the single texture is too big to remain one texture */
+    0       /* force use of subtextures */
 };
 
 void setup_texture(void);
@@ -112,6 +119,10 @@ void usage(const char *pname) {
 "\t\toption indicates that the slave's address is a broadcast address\n"
 "\t--xoffset=##\n"
 "\t\tDisplaces image by ## pixels horizontally. Numbers may be negative or positive.\n"
+"\t--subtexsize=##\n"
+"\t\tSize of subtextures, when a texture image is too big for the hardware.\n"
+"\t--forcesubtex\n"
+"\t\tForce splitting image into subtextures.\n"
     );
 }
 
@@ -156,7 +167,7 @@ void udp_handler(int recv_socket) {
     }
 }
 
-int get_addr_port(char *addr, int *port, char *arg) {
+int get_addr_port(char *addr, unsigned int *port, char *arg) {
     char *p;
     int ret = 0;
 
@@ -241,20 +252,32 @@ void get_options(const int argc, char * const argv[]) {
             { "slave",       required_argument,  NULL, 'S' },
             { "sensitivity", required_argument,  NULL, 'e' },
             { "fullscreen",  no_argument,        NULL, 'f' },
+            { "forcesubtex", no_argument,        NULL, 'F' },
             { "help",        no_argument,        NULL, 'h' },
             { "listen",      required_argument,  NULL, 'l' },
             { "multicast",   no_argument,        NULL, 'm' },
             { "xoffset",     required_argument,  NULL, 'o' },
             { "spacenav",    optional_argument,  NULL, 's' },
+            { "subtexsize",  required_argument,  NULL, 't' },
             { "verbose",     no_argument,        NULL, 'v' },
             { "swapaxes",    no_argument,        NULL, 'w' },
             { 0,             0,                  0,     0  }
         };
 
-        c = getopt_long(argc, argv, "vfs::e:whl:", long_options, &opt_index);
+        c = getopt_long(argc, argv, "vfs::e:whl:s:F", long_options, &opt_index);
         if (c == -1) break;
 
         switch (c) {
+            case 'F':
+                options.forcesubtex = 1;
+                break;
+            case 't':
+                options.subtexsize = atoi(optarg);
+                if (options.subtexsize % 2 != 0) {
+                    fprintf(stderr, "Cannot accept an odd subtexsize value (you entered %d)\n", options.subtexsize);
+                    exit(1);
+                }
+                break;
             case 'o':
                 options.xoffset = atoi(optarg);
                 break;
@@ -398,6 +421,7 @@ void get_options(const int argc, char * const argv[]) {
     else {
         fprintf(stderr, "ERROR: No images found on the command line\n");
         usage(argv[0]);
+        exit(1);
     }
 }
 
@@ -493,12 +517,12 @@ void translate(float h, float v, float z) {
 }
 
 /* render the image */
-static void render_scene(void) {
+static void draw(void) {
     redraw = 0;
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3f(1.0f, 1.0f, 1.0f);
     glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 1);
+    glBindTexture(GL_TEXTURE_2D, texture_names[texnum]);
     glBegin(GL_QUADS);
         /* The biggest thing I need to do is change these texture coordinates
          * around based on spacenav input, ensuring they keep the proper aspect
@@ -528,8 +552,43 @@ char *image_at(int i) {
     return (image->filename);
 }
 
+int check_glerror(int line) {
+    int error = 1;
+    switch (glGetError()) {
+        case GL_NO_ERROR: 
+            error = 0;
+            break;
+        case GL_INVALID_ENUM: 
+            fprintf(stderr, "Line %d: An unacceptable value is specified for an enumerated argument. The offending command is ignored, and has no other side effect than to set the error flag.\n", line);
+            break;
+        case GL_INVALID_VALUE: 
+            fprintf(stderr, "Line %d: A numeric argument is out of range. The offending command is ignored, and has no other side effect than to set the error flag.\n", line);
+            break;
+        case GL_INVALID_OPERATION: 
+            fprintf(stderr, "Line %d: The specified operation is not allowed in the current state. The offending command is ignored, and has no other side effect than to set the error flag.\n", line);
+            break;
+        case GL_STACK_OVERFLOW: 
+            fprintf(stderr, "Line %d: This command would cause a stack overflow. The offending command is ignored, and has no other side effect than to set the error flag.\n", line);
+            break;
+        case GL_STACK_UNDERFLOW: 
+            fprintf(stderr, "Line %d: This command would cause a stack underflow. The offending command is ignored, and has no other side effect than to set the error flag.\n", line);
+            break;
+        case GL_OUT_OF_MEMORY: 
+            fprintf(stderr, "Line %d: There is not enough memory left to execute the command. The state of the GL is undefined, except for the state of the error flags, after this error is recorded. \n", line);
+            break;
+        case GL_TABLE_TOO_LARGE: 
+            fprintf(stderr, "Line %d: The specified table exceeds the implementation's maximum supported table size. The offending command is ignored, and has no other side effect than to set the error flag.\n", line);
+            break;
+        default:
+            fprintf(stderr, "Line %d: glGetError() returned something we didn't expect. That's very strange.\n", line);
+    }
+    return error;
+}
+
 void setup_texture(void) {
     MagickWand *wand;
+    unsigned int curw, curh;
+    int tw, th, i;
 
     wand = NewMagickWand();
     MagickReadImage(wand, image_at(image_index));
@@ -551,8 +610,16 @@ void setup_texture(void) {
     MagickExportImagePixels(wand, 0, 0, texture_width, texture_height, "RGB", CharPixel, tex_buffer);
     */
 
+    texture_names = (GLuint *) malloc(sizeof(GLuint));
+    if (!texture_names) {
+        perror("Out of memory allocating space for one texture name");
+        exit(1);
+    }
+    num_textures = 1;
+
     glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 1);
+    glGenTextures(1, texture_names);
+    glBindTexture(GL_TEXTURE_2D, texture_names[0]);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     /* wrap horizontally and vertically */
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -563,11 +630,55 @@ void setup_texture(void) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
     glTexImage2D(GL_PROXY_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
-    if (glGetError() != GL_NO_ERROR) {
-        fprintf(stderr, "Error: There was a problem making this texture work\n");
-        exit(1);
+    if (!options.forcesubtex && !check_glerror(__LINE__)) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
     }
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
+    else {
+        if (options.verbose) {
+            fprintf(stderr, "Texture too big to be used monolithically, or subtexturing forced\n");
+        }
+
+        tw = texture_width / options.subtexsize;
+        if (texture_width % options.subtexsize != 0)
+            tw++;
+        th = texture_height / options.subtexsize;
+        if (texture_height % options.subtexsize != 0)
+            th++;
+        num_textures = tw * th;
+
+        if (options.verbose)
+            fprintf(stderr, "We'll have %d total textures: %d * %d (width: %d, height: %d, subtexsize: %d)\n",
+                num_textures, tw, th, texture_width, texture_height, options.subtexsize);
+
+        texture_names = (GLuint *) realloc(texture_names, sizeof(GLuint) * num_textures);
+        if (!texture_names) {
+            perror("Out of memory allocating space for multiple texture name");
+            exit(1);
+        }
+        i = 0;
+        for (curh = 0; curh < texture_height; curh += options.subtexsize) {
+            for (curw = 0; curw < texture_width; curw += options.subtexsize) {
+                th = ((curh + options.subtexsize <= texture_height) ? options.subtexsize : (texture_height - curh));
+                tw = ((curw + options.subtexsize <= texture_width) ? options.subtexsize : (texture_width - curw));
+
+                MagickGetImagePixels(wand, curw, curh, tw, tw, "RGB", CharPixel, tex_buffer);
+                glBindTexture(GL_TEXTURE_2D, texture_names[i]);
+                i++;
+                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+                /* wrap horizontally and vertically */
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+                /* Linear texture processing for zooming */
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tw, th, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
+                check_glerror(__LINE__);
+                if (options.verbose)
+                    fprintf(stderr, "Created another sub texture, number %d, name %d: %d, %d, %d, %d\n", i, texture_names[i], curw, curh, tw, th);
+            }
+        }
+    }
 
     horiz_disp = vert_disp = 0;
 
@@ -586,6 +697,13 @@ void next_image(void) {
 
 void handle_keyboard(SDL_keysym* keysym ) {
     switch(keysym->sym) {
+        case SDLK_j:
+            texnum++;
+            if (texnum >= num_textures)
+                texnum = 0;
+            printf("Texture is now %d of %d\n", texnum+1, num_textures);
+            redraw = 1;
+            break;
         case SDLK_q:
             quit_main_loop = 1;
             break;
@@ -742,7 +860,7 @@ int main(int argc, char * argv[]) {
 
     while (!quit_main_loop) {
         if (redraw)
-            render_scene();
+            draw();
         while( SDL_PollEvent( &event ) ) {
             switch (event.type) {
                 case SDL_KEYDOWN:
