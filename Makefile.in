@@ -1,26 +1,23 @@
-CXX = @CXX@
+CC=@CC@
 VERSION = @VERSION@
-CXXFLAGS = -Wall @CXXFLAGS@
+CFLAGS = -Wall @CFLAGS@
 LDFLAGS = @LDFLAGS@
 PREFIX = @prefix@
 
 all: lg-pano
 
-.cpp.o:
-	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
-
 lg-pano.o: lg-pano.c
-	gcc -g -O2 -Wall -I/usr/include/GL -I/usr/include/GraphicsMagick -c lg-pano.c
+	$(CC) -g -O2 $(CFLAGS) -I/usr/include/GL -I/usr/include/GraphicsMagick -c lg-pano.c
 
 .c.o:
-	$(CXX) $(CXXFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
+	$(CC) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
 
 # read-event built with gcc instead of c++
 read-event-c.o: read-event.c
-	gcc -g -O2 -Wall -c read-event.c -o read-event-c.o
+	$(CC) -g -O2 $(CFLAGS) -c read-event.c -o read-event-c.o
 
 lg-pano: lg-pano.o read-event-c.o
-	gcc lg-pano.o read-event-c.o $(LDFLAGS) -lGraphicsMagickWand -lGL -lSDL -o lg-pano
+	$(CC) lg-pano.o read-event-c.o $(LDFLAGS) -lGraphicsMagickWand -lGL -lSDL -o lg-pano
 
 clean:
 	rm -f lg-pano *~ core.* *.o
