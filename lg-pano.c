@@ -37,8 +37,11 @@ int texnum = 0;
 int quit_main_loop = 0;     /* Flag to exit the program */
 int image_index = 0,        /* Which image are we supposed to be looking at now? */
     num_images = 0,
-    num_textures = 1;
+    num_textures = 1,
+    subtextured = 0;
+int something = 0;
 GLuint *texture_names;
+float near_plane = 0.1;
 int screen_width, screen_height;
 float texture_aspect;
 unsigned int texture_width, texture_height;
@@ -71,7 +74,7 @@ struct {
     char listenaddr[ADDR_LEN];
     unsigned int valid_listenaddr, listenport, multicast;
     int xoffset;
-    unsigned int subtexsize, forcesubtex;
+    unsigned int subtexsize, forcesubtex, width, height;
 } options = {
     0,      /* verbose */
     0,      /* fullscreen */
@@ -85,7 +88,8 @@ struct {
     0,      /* multicast */
     0,      /* xoffset */
     1000,   /* size of subtextures when the single texture is too big to remain one texture */
-    0       /* force use of subtextures */
+    0,      /* force use of subtextures */
+    0, 0    /* width, height */
 };
 
 void setup_texture(void);
@@ -123,6 +127,8 @@ void usage(const char *pname) {
 "\t\tSize of subtextures, when a texture image is too big for the hardware.\n"
 "\t--forcesubtex\n"
 "\t\tForce splitting image into subtextures.\n"
+"\t--width=##, --height=##\n"
+"\t\tForce screen width and/or height to a specified value.\n"
     );
 }
 
@@ -254,6 +260,7 @@ void get_options(const int argc, char * const argv[]) {
             { "fullscreen",  no_argument,        NULL, 'f' },
             { "forcesubtex", no_argument,        NULL, 'F' },
             { "help",        no_argument,        NULL, 'h' },
+            { "height",      required_argument,  NULL, 'H' },
             { "listen",      required_argument,  NULL, 'l' },
             { "multicast",   no_argument,        NULL, 'm' },
             { "xoffset",     required_argument,  NULL, 'o' },
@@ -261,13 +268,20 @@ void get_options(const int argc, char * const argv[]) {
             { "subtexsize",  required_argument,  NULL, 't' },
             { "verbose",     no_argument,        NULL, 'v' },
             { "swapaxes",    no_argument,        NULL, 'w' },
+            { "width",       required_argument,  NULL, 'W' },
             { 0,             0,                  0,     0  }
         };
 
-        c = getopt_long(argc, argv, "vfs::e:whl:s:F", long_options, &opt_index);
+        c = getopt_long(argc, argv, "vfs::e:whl:s:FH:W:", long_options, &opt_index);
         if (c == -1) break;
 
         switch (c) {
+            case 'H':
+                options.height = atoi(optarg);
+                break;
+            case 'W':
+                options.width = atoi(optarg);
+                break;
             case 'F':
                 options.forcesubtex = 1;
                 break;
@@ -426,75 +440,17 @@ void get_options(const int argc, char * const argv[]) {
 }
 
 void translate(float h, float v, float z) {
-    /* Calculate texture coordinates */
-    /* XXX If zooming out would be blocked because of constraints, can I
-     * translate some and still zoom? */
-
-    /* Ratio of x size to y size, in normalized texture coordinates */
-    float x2y = 1.0 * screen_width * texture_height / screen_height / texture_width;
-    float xmax, xmin, ymax, ymin;
-
     struct slavehost_s *slave;
     sync_struct sync;
 
-    /* Constrain zooming */
-    if (zoom_factor + z >= 1)
-        zoom_factor += z;
-    else if (options.verbose) {
-        fprintf(stderr, "Violated zoom constraint (val: %f, delta: %f)\n", zoom_factor, z);
-    }
+    horiz_disp += h * 5;
+    vert_disp += v * 5;
+    zoom_factor += z;
 
-    xmin = (h + horiz_disp) + 0.5 - 1.0 / 2.0 / zoom_factor * x2y
-        + (1.0 * options.xoffset) / screen_width;
-    xmax = (h + horiz_disp) + 0.5 + 1.0 / 2.0 / zoom_factor * x2y
-        + (1.0 * options.xoffset) / screen_width;
+    if (z != 0 && options.verbose)
+        fprintf(stderr, "zoom factor: %f\n", zoom_factor);
 
-    ymin = (v + vert_disp) + 0.5 - 1.0 / 2.0 / zoom_factor;
-    ymax = (v + vert_disp) + 0.5 + 1.0 / 2.0 / zoom_factor;
-
-    /* XXX Constrain vertical movement */
-//        if (ymax - ymin > 1) {
-//            /* Change zoom factor */
-//            vert_disp = 0;
-//            zoom_factor = 1.0;
-//            //done++;
-//            continue;
-//        }
-//        if (ymin < 0) {
-//            fprintf(stderr, "Changing vert_disp from %f to ", vert_disp);
-//            vert_disp = 1.0 / 2.0 / zoom_factor - 0.5 - v;
-//            vert_disp -= (vert_disp * 0.01);
-//            fprintf(stderr, "%f\n", vert_disp);
-//            done++;
-//            continue;
-//        }
-//        else if (ymin > 1) {
-//            fprintf(stderr, "Changing vert_disp from %f to ", vert_disp);
-//            vert_disp = 1.0 / 2.0 / zoom_factor + 0.5 - v;
-//            vert_disp += (vert_disp * 0.01);
-//            fprintf(stderr, "%f\n", vert_disp);
-//            done++;
-//            continue;
-//        }
-//        done = 10;
-
-
-    horiz_disp += h;
-    vert_disp += v;
-
-    tex_min_x = xmin;
-    tex_max_x = xmax;
-    tex_min_y = ymin;
-    tex_max_y = ymax;
-
-    if (options.verbose) {
-        fprintf(stderr, "Texture coords: (%f, %f) -> (%f, %f)\n",
-            tex_min_x, tex_min_y, tex_max_x, tex_max_y);
-        fprintf(stderr, "Screen: (%d, %d)\timage: (%d, %d)\n",
-             screen_width, screen_height,
-             texture_width, texture_height);
-        fprintf(stderr, "Disp/zoom: (%f, %f, %f)\n\n", horiz_disp, vert_disp, zoom_factor);
-    }
+    redraw = 1;
 
     /* Notify slaves */
     sync.flag = 1234;
@@ -514,42 +470,6 @@ void translate(float h, float v, float z) {
 
     /* Make sure we redraw */
     redraw = 1;
-}
-
-/* render the image */
-static void draw(void) {
-    redraw = 0;
-    glClear(GL_COLOR_BUFFER_BIT);
-    glColor3f(1.0f, 1.0f, 1.0f);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, texture_names[texnum]);
-    glBegin(GL_QUADS);
-        /* The biggest thing I need to do is change these texture coordinates
-         * around based on spacenav input, ensuring they keep the proper aspect
-         * ratio at all times. <strike>I don't yet know how to make h360
-         * work...</strike> OpenGL lets me tile textures, and even does it by
-         * default. */
-        glTexCoord2f(tex_min_x, tex_min_y);  glVertex3f(-1, 1, 0);
-        glTexCoord2f(tex_max_x, tex_min_y);  glVertex3f(1, 1, 0);
-        glTexCoord2f(tex_max_x, tex_max_y);  glVertex3f(1, -1, 0);
-        glTexCoord2f(tex_min_x, tex_max_y);  glVertex3f(-1, -1, 0);
-    glEnd();
-    glDisable(GL_TEXTURE_2D);
-
-    SDL_GL_SwapBuffers();
-}
-
-char *image_at(int i) {
-    struct image_s *image;
-    int p = 0;
-
-    TAILQ_FOREACH(image, &image_list, entries) {
-        if (p == i) break;
-        p++;
-    }
-
-    printf("Returning %s for image file %d\n", image->filename, i);
-    return (image->filename);
 }
 
 int check_glerror(int line) {
@@ -585,9 +505,93 @@ int check_glerror(int line) {
     return error;
 }
 
+/* render the image */
+void draw(void) {
+    int curh, curw;
+    int i = 0, tw, th;
+    float minx = 0, miny = 0, maxx, maxy;
+
+    redraw = 0;
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glEnable(GL_TEXTURE_2D);
+    glPushMatrix();
+    glTranslatef(horiz_disp, vert_disp, 0);
+
+    maxx = screen_height * zoom_factor * (minx + 1.0 * texture_width / texture_height);
+    maxy = zoom_factor * (miny + screen_height);
+
+    if (!subtextured) {
+        minx = 0; miny = 0;
+        maxy = screen_height * zoom_factor;
+        maxx = texture_width * maxy / texture_height;
+        fprintf(stderr, "minx, maxx: %f, %f\t\tminy, maxy: %f, %f\n", minx, maxx, miny, maxy);
+
+        glBindTexture(GL_TEXTURE_2D, texture_names[0]);
+        glBegin(GL_QUADS);
+            glTexCoord2f(0, 0); glVertex3f(minx, maxy, i);
+            glTexCoord2f(1, 0); glVertex3f(maxx, maxy, i);
+            glTexCoord2f(1, 1); glVertex3f(maxx, miny, i);
+            glTexCoord2f(0, 1); glVertex3f(minx, miny, i);
+        glEnd();
+    }
+    else {
+        i = 0;
+        for (curh = 0; curh < texture_height; curh += options.subtexsize) {
+            for (curw = 0; curw < texture_width; curw += options.subtexsize) {
+                /*
+                if (i != something) {
+                    fprintf(stderr, "Something (%d) doesn't match i (%d)\n", something, i);
+                    continue;
+                }
+                fprintf(stderr, "Something (%d) matches i (%d)\n", something, i);
+                */
+                minx = curw * zoom_factor;
+                miny = curh * zoom_factor;
+
+                tw = (curw + options.subtexsize < texture_width) ? options.subtexsize : texture_width - curw;
+                th = (curh + options.subtexsize < texture_height) ? options.subtexsize : texture_height - curh;
+
+                maxy = th * zoom_factor + miny;
+                maxx = tw * (maxy - miny) / th + minx;
+                fprintf(stderr, "zf: %0.2f\tminx, maxx: %0.2f, %0.2f\t"
+                                "miny, maxy: %0.2f, %0.2f\ttw, th: %d, %d\n",
+                    zoom_factor, minx, maxx, miny, maxy, tw, th);
+
+                glBindTexture(GL_TEXTURE_2D, texture_names[i]);
+                glBegin(GL_QUADS);
+                    glTexCoord2f(0, 0); glVertex3f(minx, maxy, 0);
+                    glTexCoord2f(1, 0); glVertex3f(maxx, maxy, 0);
+                    glTexCoord2f(1, 1); glVertex3f(maxx, miny, 0);
+                    glTexCoord2f(0, 1); glVertex3f(minx, miny, 0);
+                glEnd();
+                i++;
+            }
+        }
+        something++;
+    }
+    glPopMatrix();
+    check_glerror(__LINE__);
+
+    SDL_GL_SwapBuffers();
+}
+
+char *image_at(int i) {
+    struct image_s *image;
+    int p = 0;
+
+    TAILQ_FOREACH(image, &image_list, entries) {
+        if (p == i) break;
+        p++;
+    }
+
+    printf("Returning %s for image file %d\n", image->filename, i);
+    return (image->filename);
+}
+
 void setup_texture(void) {
     MagickWand *wand;
-    unsigned int curw, curh;
+    int curw, curh;
     int tw, th, i;
 
     wand = NewMagickWand();
@@ -631,12 +635,14 @@ void setup_texture(void) {
 
     glTexImage2D(GL_PROXY_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
     if (!options.forcesubtex && !check_glerror(__LINE__)) {
+        subtextured = 0;
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
     }
     else {
         if (options.verbose) {
             fprintf(stderr, "Texture too big to be used monolithically, or subtexturing forced\n");
         }
+        subtextured = 1;
 
         tw = texture_width / options.subtexsize;
         if (texture_width % options.subtexsize != 0)
@@ -656,12 +662,13 @@ void setup_texture(void) {
             exit(1);
         }
         i = 0;
-        for (curh = 0; curh < texture_height; curh += options.subtexsize) {
+        for (curh = (texture_height - options.subtexsize); curh > 0; curh -= options.subtexsize) {
+            printf("curh: %d\ttexheight: %d\tsubtexsize: %d\n", curh, texture_height, options.subtexsize);
             for (curw = 0; curw < texture_width; curw += options.subtexsize) {
-                th = ((curh + options.subtexsize <= texture_height) ? options.subtexsize : (texture_height - curh));
+                th = (curh > options.subtexsize) ? options.subtexsize : curh;
                 tw = ((curw + options.subtexsize <= texture_width) ? options.subtexsize : (texture_width - curw));
 
-                MagickGetImagePixels(wand, curw, curh, tw, tw, "RGB", CharPixel, tex_buffer);
+                MagickGetImagePixels(wand, curw, curh, tw, th, "RGB", CharPixel, tex_buffer);
                 glBindTexture(GL_TEXTURE_2D, texture_names[i]);
                 i++;
                 glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -683,7 +690,7 @@ void setup_texture(void) {
     horiz_disp = vert_disp = 0;
 
     /* Initial zoom factor is whatever makes the image fill the screen vertically */
-    zoom_factor = 1.0;
+    zoom_factor = screen_height * 1.0 / texture_height;
 
     /* Set texture coordinates */
     translate(0, 0, 0);
@@ -708,10 +715,10 @@ void handle_keyboard(SDL_keysym* keysym ) {
             quit_main_loop = 1;
             break;
         case SDLK_a:
-            translate(0.1, 0, 0);
+            translate(-0.1, 0, 0);
             break;
         case SDLK_d:
-            translate(-0.1, 0, 0);
+            translate(0.1, 0, 0);
             break;
         case SDLK_w:
             translate(0, 0.1, 0);
@@ -720,10 +727,10 @@ void handle_keyboard(SDL_keysym* keysym ) {
             translate(0, -0.1, 0);
             break;
         case SDLK_z:
-            translate(0, 0, -0.05);
+            translate(0, 0, -1.5);
             break;
         case SDLK_c:
-            translate(0, 0, 0.05);
+            translate(0, 0, 1.5);
             break;
         case SDLK_x:
             next_image();
@@ -798,6 +805,8 @@ int main(int argc, char * argv[]) {
     int retval;
     int recv_socket = 0;
 
+    GLfloat h;
+
     SDL_Event event;
 
     get_options(argc, argv);
@@ -819,6 +828,15 @@ int main(int argc, char * argv[]) {
 
     screen_width = info->current_w;
     screen_height = info->current_h;
+    if (options.verbose)
+        fprintf(stderr, "Calculated screen resolution: %d x %d\n", screen_width, screen_height);
+
+    if (options.width)
+        screen_width = options.width;
+    if (options.height)
+        screen_height = options.height;
+    if (options.verbose)
+        fprintf(stderr, "Actual screen resolution: %d x %d\n", screen_width, screen_height);
 
     bpp = info->vfmt->BitsPerPixel;
 
@@ -840,6 +858,20 @@ int main(int argc, char * argv[]) {
 
     glDisable(GL_DEPTH_TEST);
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+    glViewport(0, 0, screen_width, screen_height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    h = 1.0 * screen_width / screen_height;
+    if (options.verbose)
+        fprintf(stderr, "Aspect: %f\n", h);
+    glOrtho(0, screen_width, 0, screen_height, 5, 100);
+    /*
+    glFrustum(-0.1, 0.1, -h, h, near_plane, 60);
+    */
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(0, 0, -6);
 
     setup_texture();
 
