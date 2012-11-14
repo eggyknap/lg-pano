@@ -443,9 +443,11 @@ void translate(float h, float v, float z) {
     struct slavehost_s *slave;
     sync_struct sync;
 
+    fprintf(stderr, "Running translate()\n");
     horiz_disp += h * 5;
     vert_disp += v * 5;
-    zoom_factor += z;
+    if (z != 0)
+        zoom_factor *= z;
 
     if (z != 0 && options.verbose)
         fprintf(stderr, "zoom factor: %f\n", zoom_factor);
@@ -518,13 +520,12 @@ void draw(void) {
     glPushMatrix();
     glTranslatef(horiz_disp, vert_disp, 0);
 
-    maxx = screen_height * zoom_factor * (minx + 1.0 * texture_width / texture_height);
-    maxy = zoom_factor * (miny + screen_height);
+    maxy = screen_height * zoom_factor;
+    maxx = texture_width * maxy / texture_height;
+    glTranslatef((maxx - screen_width) / -2.0, (maxy - screen_height)/ -2.0, 0);
 
     if (!subtextured) {
         minx = 0; miny = 0;
-        maxy = screen_height * zoom_factor;
-        maxx = texture_width * maxy / texture_height;
         fprintf(stderr, "minx, maxx: %f, %f\t\tminy, maxy: %f, %f\n", minx, maxx, miny, maxy);
 
         glBindTexture(GL_TEXTURE_2D, texture_names[0]);
@@ -539,13 +540,6 @@ void draw(void) {
         i = 0;
         for (curh = 0; curh < texture_height; curh += options.subtexsize) {
             for (curw = 0; curw < texture_width; curw += options.subtexsize) {
-                /*
-                if (i != something) {
-                    fprintf(stderr, "Something (%d) doesn't match i (%d)\n", something, i);
-                    continue;
-                }
-                fprintf(stderr, "Something (%d) matches i (%d)\n", something, i);
-                */
                 minx = curw * zoom_factor;
                 miny = curh * zoom_factor;
 
@@ -691,6 +685,7 @@ void setup_texture(void) {
 
     /* Initial zoom factor is whatever makes the image fill the screen vertically */
     zoom_factor = screen_height * 1.0 / texture_height;
+    fprintf(stderr, "zoom factor: %f\n", zoom_factor);
 
     /* Set texture coordinates */
     translate(0, 0, 0);
@@ -727,10 +722,10 @@ void handle_keyboard(SDL_keysym* keysym ) {
             translate(0, -0.1, 0);
             break;
         case SDLK_z:
-            translate(0, 0, -1.5);
+            translate(0, 0, 0.5);
             break;
         case SDLK_c:
-            translate(0, 0, 1.5);
+            translate(0, 0, 2);
             break;
         case SDLK_x:
             next_image();
