@@ -7,7 +7,7 @@ PREFIX = @prefix@
 all: lg-pano
 
 lg-pano.o: lg-pano.c
-	$(CC) -g -O2 $(CFLAGS) -I/usr/include/GL -I/usr/include/GraphicsMagick -c lg-pano.c
+	$(CC) -g -O2 $(CFLAGS) -I/usr/include/GL -I/usr/include/ImageMagick -c lg-pano.c
 
 .c.o:
 	$(CC) $(CFLAGS) -DPREFIX=\"$(PREFIX)\" -DVERSION=\"$(VERSION)\" -c $<
@@ -17,7 +17,7 @@ read-event-c.o: read-event.c
 	$(CC) -g -O2 $(CFLAGS) -c read-event.c -o read-event-c.o
 
 lg-pano: lg-pano.o read-event-c.o
-	$(CC) lg-pano.o read-event-c.o $(LDFLAGS) -lGraphicsMagickWand -lGL -lSDL -o lg-pano
+	$(CC) lg-pano.o read-event-c.o $(LDFLAGS) -lMagickWand -lGL -lSDL -o lg-pano
 
 clean:
 	rm -f lg-pano *~ core.* *.o

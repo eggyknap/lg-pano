@@ -443,10 +443,10 @@ void translate(float h, float v, float z) {
     struct slavehost_s *slave;
     sync_struct sync;
 
-    fprintf(stderr, "Running translate()\n");
+    fprintf(stderr, "Running translate(%f, %f, %f) with zoom factor %f\n", h, v, z, zoom_factor);
     horiz_disp += h * 5;
     vert_disp += v * 5;
-    if (z != 0)
+    if (zoom_factor * z >= 0.1)
         zoom_factor *= z;
 
     if (z != 0 && options.verbose)
@@ -514,15 +514,23 @@ void draw(void) {
     float minx = 0, miny = 0, maxx, maxy;
 
     redraw = 0;
+    check_glerror(__LINE__);
     glClear(GL_COLOR_BUFFER_BIT);
+    check_glerror(__LINE__);
     glColor3f(1.0f, 1.0f, 1.0f);
+    check_glerror(__LINE__);
     glEnable(GL_TEXTURE_2D);
+    check_glerror(__LINE__);
     glPushMatrix();
+    check_glerror(__LINE__);
     glTranslatef(horiz_disp, vert_disp, 0);
+    check_glerror(__LINE__);
 
     maxy = screen_height * zoom_factor;
     maxx = texture_width * maxy / texture_height;
+    check_glerror(__LINE__);
     glTranslatef((maxx - screen_width) / -2.0, (maxy - screen_height)/ -2.0, 0);
+    check_glerror(__LINE__);
 
     if (!subtextured) {
         minx = 0; miny = 0;
@@ -587,12 +595,16 @@ void setup_texture(void) {
     MagickWand *wand;
     int curw, curh;
     int tw, th, i;
+    int full_texture_works = 0;
 
     wand = NewMagickWand();
     MagickReadImage(wand, image_at(image_index));
 
     texture_width = MagickGetImageWidth(wand);
     texture_height = MagickGetImageHeight(wand);
+
+    if (options.verbose)
+        fprintf(stderr, "Texture resolution: %d x %d\n", texture_width, texture_height);
 
     if (tex_buffer != NULL)
         free(tex_buffer);
@@ -602,11 +614,11 @@ void setup_texture(void) {
         perror("Out of memory trying to allocate texture");
         exit(-1);
     }
-    MagickGetImagePixels(wand, 0, 0, texture_width, texture_height, "RGB", CharPixel, tex_buffer);
     /*
-     * IMAGEMAGICK VERSION
-    MagickExportImagePixels(wand, 0, 0, texture_width, texture_height, "RGB", CharPixel, tex_buffer);
+     * GRAPHICSMAGICK VERSION
+    MagickGetImagePixels(wand, 0, 0, texture_width, texture_height, "RGB", CharPixel, tex_buffer);
     */
+    MagickExportImagePixels(wand, 0, 0, texture_width, texture_height, "RGB", CharPixel, tex_buffer);
 
     texture_names = (GLuint *) malloc(sizeof(GLuint));
     if (!texture_names) {
@@ -626,16 +638,20 @@ void setup_texture(void) {
     /* Linear texture processing for zooming */
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    check_glerror(__LINE__);
 
     glTexImage2D(GL_PROXY_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
     if (!options.forcesubtex && !check_glerror(__LINE__)) {
         subtextured = 0;
+	if (options.verbose)
+	    fprintf(stderr, "Full image texture successful. Not subtexturing.\n");
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture_width, texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, tex_buffer);
+        if (!check_glerror(__LINE__))
+	    full_texture_works = 1;
     }
-    else {
-        if (options.verbose) {
-            fprintf(stderr, "Texture too big to be used monolithically, or subtexturing forced\n");
-        }
+    if (!full_texture_works) {
+        if (options.verbose)
+            fprintf(stderr, "Failed to use texture monolithically, or subtexturing forced. Texture will be split into smaller pieces.\n");
         subtextured = 1;
 
         tw = texture_width / options.subtexsize;
@@ -662,7 +678,7 @@ void setup_texture(void) {
                 th = (curh > options.subtexsize) ? options.subtexsize : curh;
                 tw = ((curw + options.subtexsize <= texture_width) ? options.subtexsize : (texture_width - curw));
 
-                MagickGetImagePixels(wand, curw, curh, tw, th, "RGB", CharPixel, tex_buffer);
+                MagickExportImagePixels(wand, curw, curh, tw, th, "RGB", CharPixel, tex_buffer);
                 glBindTexture(GL_TEXTURE_2D, texture_names[i]);
                 i++;
                 glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -867,8 +883,10 @@ int main(int argc, char * argv[]) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glTranslatef(0, 0, -6);
+    check_glerror(__LINE__);
 
     setup_texture();
+    check_glerror(__LINE__);
 
     if (options.use_spacenav) {
         if (!init_spacenav((options.spacenav_dev ? options.spacenav_dev : "/dev/input/spacenavigator"), 1)) {
@@ -923,6 +941,7 @@ int main(int argc, char * argv[]) {
                     // Left spnav button goes to previous image, right one goes to next image
                     image_index += spev.button * 2 - 1;
                     setup_texture();
+		    check_glerror(__LINE__);
                 }
             }
         }
